@@ -15,6 +15,13 @@ export const routes = [
     meta: { title: '识别', icon: 'i-carbon:image-search', quadrant: true },
   },
   {
+    path: '/calibration',
+    name: 'calibration',
+    component: () => import('@/views/CalibrationView.vue'),
+    // 标定不进首页四象限（§4 四象限只含识别/历史/数据/导出），但仍进侧栏菜单
+    meta: { title: '像素标定', icon: 'i-carbon:ruler', quadrant: false },
+  },
+  {
     path: '/history',
     name: 'history',
     component: () => import('@/views/HistoryView.vue'),

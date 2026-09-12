@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useBreakpoints, breakpointsTailwind } from '@vueuse/core'
+import { useBreakpoints, breakpointsTailwind, useStorage } from '@vueuse/core'
 import {
   NLayout,
   NLayoutSider,
@@ -10,15 +10,20 @@ import {
   NMenu,
   NButton,
   NDrawer,
+  NWatermark,
+  NSwitch,
 } from 'naive-ui'
 import { useMenu } from '@/composables/useMenu'
 import { useTheme } from '@/composables/useTheme'
 import SiteQrcode from '@/components/SiteQrcode.vue'
+import { WATERMARK_KEY } from '@/utils/constants'
 
 const route = useRoute()
 const router = useRouter()
 const { menuOptions } = useMenu()
 const { isDark, toggleTheme } = useTheme()
+// §3 水印开关持久化
+const watermarkOn = useStorage(WATERMARK_KEY, true)
 
 // §4 响应式断点（VueUse breakpointsTailwind）：<768 移动用抽屉，≥768 用可折叠侧栏
 const breakpoints = useBreakpoints(breakpointsTailwind)
@@ -50,6 +55,8 @@ function toggleMenu() {
 </script>
 
 <template>
+  <!-- §3 全屏水印 + 顶栏开关 -->
+  <n-watermark v-if="watermarkOn" content="牛顿环测量工具" fullscreen cross :font-size="16" :z-index="1500" />
   <!-- h-screen(100vh) 直接锚定视口，不依赖 #app→provider 的百分比高度链，保证铺满 -->
   <n-layout :has-sider="!isMobile" class="h-screen">
     <!-- PC / 平板：可折叠侧栏（naive-ui 内置宽度过渡动画） -->
@@ -102,9 +109,10 @@ function toggleMenu() {
           <i class="i-carbon:menu text-lg" />
         </n-button>
         <span class="text-sm opacity-70">{{ route.meta.title }}</span>
+        <!-- §3 水印开关（顶栏） -->
+        <n-switch v-model:value="watermarkOn" size="small" class="ml-auto mr-3" title="水印开关" />
         <!-- 右上角主题切换（参考 naive-ui 官网）；选择持久化到 localStorage -->
         <n-button
-          class="ml-auto"
           quaternary
           circle
           :title="isDark ? '切换到浅色主题' : '切换到深色主题'"
