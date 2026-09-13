@@ -7,7 +7,9 @@ import {
 } from 'unocss'
 
 // §2：只启用 presetUno + presetIcons（+ directives / variant-group 两个 transformer），禁止 presetAttributify。
-// 菜单 / 四象限所用图标集中在 safelist 声明，杜绝静态提取漏生成、图标不渲染。
+// 类名（含图标）只在使用处写一次：默认扫描 vue/html/md 等之外，
+// 把 src 目录下的纯 .js/.ts 也纳入 pipeline（路由 meta 图标等类名字面量
+// 过去提取不到，需在 safelist 重复声明一份，易漏）。
 export default defineConfig({
   presets: [
     presetUno(),
@@ -20,16 +22,14 @@ export default defineConfig({
     }),
   ],
   transformers: [transformerDirectives(), transformerVariantGroup()],
-  safelist: [
-    'i-carbon:home',
-    'i-carbon:image-search',
-    'i-carbon:time',
-    'i-carbon:chart-bar',
-    'i-carbon:download',
-    'i-carbon:moon',
-    'i-carbon:sun',
-    'i-carbon:menu',
-  ],
+  content: {
+    pipeline: {
+      include: [
+        /\.(vue|svelte|[jt]sx|mdx?|astro|elm|php|phtml|html)($|\?)/, // 默认扫描范围
+        /[\\/]src[\\/].+\.[jt]s($|\?)/, // src 下 JS/TS 中的类名字面量（路由图标等）
+      ],
+    },
+  },
   theme: {
     // 表面色走 CSS 变量，随深/浅主题翻转（变量由 useTheme 写入 <html>）
     colors: {
