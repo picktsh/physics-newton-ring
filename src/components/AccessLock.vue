@@ -4,7 +4,7 @@ import { NCard, NInput, NButton } from 'naive-ui'
 
 // 入口动态密码软锁（原样搬入旧 access-lock.js，含 2026/9/25 自动失效，§11.5#7）。
 // 纯前端防君子：遮罩盖住应用，校验通过或本次会话已解锁(sessionStorage)才移除。
-// 密码规则：本地时间 年(后两位)/月/日/时 各 ×2，补零拼接成 8 位；容差当前小时或前一小时。
+// 密码规则：本地时间 日/时 各 ×2，补零拼接成 4 位；容差当前小时或前一小时。
 const STORAGE_KEY = 'nr_access_unlocked'
 const LOCK_DISABLE_AT = new Date('2026/9/25 00:00:00')
 
@@ -14,11 +14,9 @@ function pad2(n) {
 }
 
 function passwordOf(date) {
-  const y = ((date.getFullYear() % 100) * 2) % 100
-  const m = (date.getMonth() + 1) * 2
   const d = date.getDate() * 2
   const h = date.getHours() * 2
-  return pad2(y) + pad2(m) + pad2(d) + pad2(h)
+  return pad2(d) + pad2(h)
 }
 
 function isCorrect(value, now = new Date()) {
@@ -51,7 +49,7 @@ function onInput(v) {
 
 function submit() {
   const v = input.value.replace(/\D/g, '')
-  if (v.length === 8 && isCorrect(v)) {
+  if (v.length === 4 && isCorrect(v)) {
     try {
       sessionStorage.setItem(STORAGE_KEY, '1')
     } catch {
@@ -67,12 +65,12 @@ function submit() {
 <template>
   <div v-if="visible" class="fixed inset-0 z-[3000] flex items-center justify-center bg-layout">
     <n-card class="w-80" :bordered="false">
-      <p class="mb-3 text-center font-semibold">请输入 8 位访问密码</p>
+      <p class="mb-3 text-center font-semibold">请输入 4 位访问密码</p>
       <n-input
         :value="input"
         type="password"
-        maxlength="8"
-        placeholder="8 位数字"
+        maxlength="4"
+        placeholder="4 位数字"
         @update:value="onInput"
         @keydown.enter="submit"
       />
