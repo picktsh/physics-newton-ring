@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { NCard, NEmpty, NDescriptions, NDescriptionsItem, NStatistic, NTag } from 'naive-ui'
+import KatexFormula from './KatexFormula.vue'
 
 // 表1 / 表2 / 平均曲率半径 + 不确定度五步明细的共用展示组件。
 // 数据页（JSON 回显）、导出页（预览）、识别页（结果区）三处复用，保证口径一致。
@@ -11,6 +12,46 @@ const props = defineProps({
 const has = computed(() => !!(props.payload && props.payload.diameterData?.length))
 const u = computed(() => props.payload?.uncertainty)
 const showU = computed(() => !!(u.value && u.value.valid))
+
+// 把 1.818e-1 之类的科学计数法转成 KaTeX 的 ×10⁻¹ 规范写法
+function sci(n) {
+  if (n == null || !isFinite(n) || n === 0) return '0'
+  const [mant, exp] = Number(n).toExponential(3).split('e')
+  return `${mant}\\times10^{${parseInt(exp, 10)}}`
+}
+
+// 结果小结：R = (均值 ± 扩展不确定度) m
+const resultLatex = computed(() =>
+  u.value ? `R = (${u.value.meanText}\\,\\pm\\,${u.value.uText})\\ \\text{m}` : '',
+)
+
+// 五步评定的公式（数值来自 u，符号与结构以 LaTeX 排版）
+const step1Latex = computed(() =>
+  u.value ? `\\Delta = ${u.value.deltaInstrument}\\ \\text{mm}` : '',
+)
+const step2Latex = computed(() =>
+  u.value ? `u_B(D) = \\sqrt{2}\\,\\Delta = ${u.value.uBDText}\\ \\text{mm}` : '',
+)
+const step3Latex = computed(() =>
+  u.value
+    ? `\\dfrac{u_B(R)}{R} = ${(u.value.uBRel * 100).toFixed(4)}\\%\\;\\Rightarrow\\; u_B = ${u.value.uBText}\\ \\text{m}`
+    : '',
+)
+const step4Latex = computed(() =>
+  u.value
+    ? `s = ${sci(u.value.s)}\\ \\text{m},\\quad \\sum_i (R_i-\\bar{R})^2 = ${sci(u.value.sumSqDev)},\\quad \\nu_A = ${u.value.nuA}\\;\\Rightarrow\\; u_A = ${u.value.uAText}\\ \\text{m}`
+    : '',
+)
+const step5Latex = computed(() =>
+  u.value
+    ? `u_C = \\sqrt{u_A^2+u_B^2} = ${u.value.uCText}\\ \\text{m},\\quad \\nu_{\\text{eff}} = ${u.value.nuEffText},\\quad U = k\\,u_C = ${u.value.uText}\\ \\text{m}\\ (k=${u.value.kText})`
+    : '',
+)
+const finalLatex = computed(() =>
+  u.value
+    ? `R = (${u.value.meanText}\\,\\pm\\,${u.value.uText})\\ \\text{m},\\quad U_R = \\dfrac{U}{R} = ${u.value.relativeText.replace('%', '\\%')}`
+    : '',
+)
 </script>
 
 <template>
@@ -24,7 +65,7 @@ const showU = computed(() => !!(u.value && u.value.valid))
         </n-statistic>
         <n-statistic v-if="showU" label="测量结果 (p=0.683)">
           <span class="text-lg font-semibold">
-            R = ({{ u.meanText }} ± {{ u.uText }}) m
+            <KatexFormula :latex="resultLatex" />
           </span>
         </n-statistic>
         <n-statistic label="像素标定" :value="payload.pixelScale || '—'">
@@ -98,23 +139,23 @@ const showU = computed(() => !!(u.value && u.value.valid))
     >
       <n-descriptions label-placement="left" bordered :column="1" size="small">
         <n-descriptions-item label="① 仪器示值误差限 Δ">
-          {{ u.deltaInstrument }} mm（正态分布 p=0.683, k=1）
+          <KatexFormula :latex="step1Latex" />
+          <span class="ml-1 opacity-70">（正态分布 p=0.683, k=1）</span>
         </n-descriptions-item>
         <n-descriptions-item label="② 直径 B 类 u_B(D)">
-          √2 · Δ = {{ u.uBDText }} mm
+          <KatexFormula :latex="step2Latex" />
         </n-descriptions-item>
         <n-descriptions-item label="③ R 的 B 类相对不确定度">
-          {{ (u.uBRel * 100).toFixed(4) }}% → u_B = {{ u.uBText }} m
+          <KatexFormula :latex="step3Latex" />
         </n-descriptions-item>
         <n-descriptions-item label="④ A 类不确定度 u_A">
-          s = {{ u.s ? u.s.toExponential(3) : '—' }} m，Σ(Rᵢ−R̄)² = {{ u.sumSqDev ? u.sumSqDev.toExponential(3) : '—' }}，
-          ν_A = {{ u.nuA }} → u_A = {{ u.uAText }} m
+          <KatexFormula :latex="step4Latex" />
         </n-descriptions-item>
         <n-descriptions-item label="⑤ 合成 u_C 与扩展 U">
-          u_C = √(u_A²+u_B²) = {{ u.uCText }} m；ν_eff = {{ u.nuEffText }}；U = u_C = {{ u.uText }} m (k={{ u.kText }})
+          <KatexFormula :latex="step5Latex" />
         </n-descriptions-item>
         <n-descriptions-item label="最终结果">
-          R = ({{ u.meanText }} ± {{ u.uText }}) m，U/R = {{ u.relativeText }}
+          <KatexFormula :latex="finalLatex" />
         </n-descriptions-item>
       </n-descriptions>
 
