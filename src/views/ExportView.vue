@@ -26,7 +26,8 @@ const imported = ref(null) // 由 JSON 导入的 payload（无原图时不可导
 const payload = computed(() => imported.value || buildResultPayload(session.value))
 // 图片导出需要原图 + 环（会话才有；纯 JSON 导入一般不含标注图）
 const canExportImage = computed(
-  () => !!(session.value?.imageSrc && session.value?.rings?.length) || !!payload.value?.annotatedImage,
+  () =>
+    !!(session.value?.imageSrc && session.value?.rings?.length) || !!payload.value?.annotatedImage,
 )
 
 function stamp() {
@@ -94,18 +95,26 @@ function exportCSV() {
 }
 
 function exportMarkdown() {
-  downloadBlob(toMarkdown(payload.value), `牛顿环测量结果_${stamp()}.md`, 'text/markdown;charset=utf-8;')
+  downloadBlob(
+    toMarkdown(payload.value),
+    `牛顿环测量结果_${stamp()}.md`,
+    'text/markdown;charset=utf-8;',
+  )
   message.success('表格（Markdown）已导出')
 }
 
 function exportHTML() {
-  downloadBlob(toHTMLPage(payload.value), `牛顿环测量结果_${stamp()}.html`, 'text/html;charset=utf-8;')
+  downloadBlob(
+    toHTMLPage(payload.value),
+    `牛顿环测量结果_${stamp()}.html`,
+    'text/html;charset=utf-8;',
+  )
   message.success('网页（HTML）已导出')
 }
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-4xl flex-col gap-4">
+  <div class="flex max-w-4xl flex-col gap-4">
     <n-card :bordered="false" class="bg-card" title="导出 · 测量结果">
       <n-empty v-if="!payload" description="暂无可导出的测量结果" class="py-6">
         <template #extra>

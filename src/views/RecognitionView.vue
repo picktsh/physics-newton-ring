@@ -24,7 +24,12 @@ import {
   extractRingDataForManual,
   mergeAndNumberRings,
 } from '@/utils/imageProcessor'
-import { clearCanvas, drawDetectionResults, drawCenterOverlay, drawOverlay } from '@/utils/canvasDrawer'
+import {
+  clearCanvas,
+  drawDetectionResults,
+  drawCenterOverlay,
+  drawOverlay,
+} from '@/utils/canvasDrawer'
 import {
   initCanvasInteraction,
   onTableRowHover,
@@ -146,9 +151,13 @@ const edgeMatrix = computed(() => {
 // ===== 计算链（表1/表2/平均/不确定度）=====
 const psNum = computed(() => pixelScaleNumber())
 const diameterData = computed(() => calculateDiameterData(enabledRings.value, psNum.value))
-const radiusData = computed(() => calculateRadiusData(enabledRings.value, psNum.value, diffStep.value))
+const radiusData = computed(() =>
+  calculateRadiusData(enabledRings.value, psNum.value, diffStep.value),
+)
 const averageRadius = computed(() => calculateAverageRadius(radiusData.value))
-const radiusUncertainty = computed(() => calculateRadiusUncertainty(radiusData.value, averageRadius.value))
+const radiusUncertainty = computed(() =>
+  calculateRadiusUncertainty(radiusData.value, averageRadius.value),
+)
 const calculationResults = computed(() =>
   generateCalculationResults(
     diameterData.value,
@@ -281,16 +290,20 @@ function enterAwaitingCenterPhase() {
   })
 }
 
-watch([detectedCenter, centerCrossArm], () => {
-  if (centerPhase.value !== 'awaiting-center' || !detectedCenter.value) return
-  drawCenterOverlay(
-    resultCanvasRef,
-    detectedCenter.value,
-    imgWidth.value,
-    imgHeight.value,
-    centerCrossArm.value,
-  )
-}, { deep: true })
+watch(
+  [detectedCenter, centerCrossArm],
+  () => {
+    if (centerPhase.value !== 'awaiting-center' || !detectedCenter.value) return
+    drawCenterOverlay(
+      resultCanvasRef,
+      detectedCenter.value,
+      imgWidth.value,
+      imgHeight.value,
+      centerCrossArm.value,
+    )
+  },
+  { deep: true },
+)
 
 // ===== 第二步：确认圆心并识别暗环 =====
 async function confirmCenterAndDetectRings() {
@@ -314,7 +327,10 @@ async function confirmCenterAndDetectRings() {
     }
     centerPhase.value = 'done'
     ringList.value = darkRings.map((r) => ({ ...r, enabled: r.enabled !== false }))
-    showStatus(`✅ 识别到 ${darkRings.length} 个暗环，可在表1去除错环/改编号，或点击图像/全屏放大补环`, 'success')
+    showStatus(
+      `✅ 识别到 ${darkRings.length} 个暗环，可在表1去除错环/改编号，或点击图像/全屏放大补环`,
+      'success',
+    )
     nextTick(() => {
       drawDetectionResults(resultCanvasRef, imageManager)
       initCanvasInteractionWrapper()
@@ -451,7 +467,9 @@ function onCenterKeydown(e) {
     e.preventDefault()
     const step = 8 * (e.shiftKey ? 5 : 1)
     const delta = e.key === '+' || e.key === '=' ? step : -step
-    const maxArm = imgWidth.value ? Math.round(Math.hypot(imgWidth.value, imgHeight.value) / 2) : 200
+    const maxArm = imgWidth.value
+      ? Math.round(Math.hypot(imgWidth.value, imgHeight.value) / 2)
+      : 200
     centerCrossArm.value = Math.max(4, Math.min(maxArm, centerCrossArm.value + delta))
     return
   }
@@ -459,11 +477,20 @@ function onCenterKeydown(e) {
   let dx = 0
   let dy = 0
   switch (e.key) {
-    case 'ArrowUp': dy = -step; break
-    case 'ArrowDown': dy = step; break
-    case 'ArrowLeft': dx = -step; break
-    case 'ArrowRight': dx = step; break
-    default: return
+    case 'ArrowUp':
+      dy = -step
+      break
+    case 'ArrowDown':
+      dy = step
+      break
+    case 'ArrowLeft':
+      dx = -step
+      break
+    case 'ArrowRight':
+      dx = step
+      break
+    default:
+      return
   }
   e.preventDefault()
   detectedCenter.value = {
@@ -522,7 +549,9 @@ function computeZoomCrop() {
 }
 function measureZoomViewport() {
   const stage = zoomStageRef.value
-  zoomViewport.value = stage ? { w: stage.clientWidth || 0, h: stage.clientHeight || 0 } : { w: 0, h: 0 }
+  zoomViewport.value = stage
+    ? { w: stage.clientWidth || 0, h: stage.clientHeight || 0 }
+    : { w: 0, h: 0 }
 }
 function clampZoomOffset() {
   const V = zoomViewport.value
@@ -561,7 +590,10 @@ function openZoom() {
     measureZoomViewport()
     resetZoomView()
   })
-  showStatus(`⛶ 已全屏放大：取景 ${crop.w}×${crop.h}px，滚轮缩放 / 拖拽平移 / 点击补环，ESC 关闭`, 'success')
+  showStatus(
+    `⛶ 已全屏放大：取景 ${crop.w}×${crop.h}px，滚轮缩放 / 拖拽平移 / 点击补环，ESC 关闭`,
+    'success',
+  )
 }
 function closeZoom() {
   if (zoomPan) {
@@ -602,7 +634,13 @@ function onZoomWheel(event) {
 function onZoomMouseDown(event) {
   if (!zoomOpen.value || event.button !== 0) return
   event.preventDefault()
-  zoomPan = { sx: event.clientX, sy: event.clientY, ox: zoomOffset.value.x, oy: zoomOffset.value.y, moved: false }
+  zoomPan = {
+    sx: event.clientX,
+    sy: event.clientY,
+    ox: zoomOffset.value.x,
+    oy: zoomOffset.value.y,
+    moved: false,
+  }
   zoomPanning.value = true
   document.addEventListener('mousemove', onZoomPanMove)
   document.addEventListener('mouseup', onZoomPanEnd)
@@ -638,7 +676,12 @@ function onZoomMouseMove(event) {
   const p = zoomEventToImageCoords(event)
   if (!p) return
   const center = detectedCenter.value || imgState.center
-  zoomCursor.value = { x: p.x, y: p.y, inside: p.inside, r: center ? Math.hypot(p.x - center.x, p.y - center.y) : 0 }
+  zoomCursor.value = {
+    x: p.x,
+    y: p.y,
+    inside: p.inside,
+    r: center ? Math.hypot(p.x - center.x, p.y - center.y) : 0,
+  }
   let hit = null
   for (const ring of enabledRings.value) {
     const dist = Math.hypot(p.x - ring.x, p.y - ring.y)
@@ -690,11 +733,20 @@ function onZoomKeydown(e) {
   let dx = 0
   let dy = 0
   switch (e.key) {
-    case 'ArrowUp': dy = V.h * step; break
-    case 'ArrowDown': dy = -V.h * step; break
-    case 'ArrowLeft': dx = V.w * step; break
-    case 'ArrowRight': dx = -V.w * step; break
-    default: return
+    case 'ArrowUp':
+      dy = V.h * step
+      break
+    case 'ArrowDown':
+      dy = -V.h * step
+      break
+    case 'ArrowLeft':
+      dx = V.w * step
+      break
+    case 'ArrowRight':
+      dx = -V.w * step
+      break
+    default:
+      return
   }
   e.preventDefault()
   zoomOffset.value = { x: zoomOffset.value.x + dx, y: zoomOffset.value.y + dy }
@@ -826,7 +878,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-6xl flex-col gap-4">
+  <div class="flex max-w-6xl flex-col gap-4">
     <!-- 内联 SVG 卷积核（锐化 / 边缘增强预览） -->
     <svg width="0" height="0" class="absolute">
       <filter id="sharpenFilter">
@@ -840,12 +892,20 @@ onUnmounted(() => {
     <!-- 上传 / 状态 -->
     <n-card :bordered="false" class="bg-card">
       <n-space align="center" wrap :size="12">
-        <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="onFilePick" />
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept="image/*"
+          class="hidden"
+          @change="onFilePick"
+        />
         <n-button type="primary" @click="fileInputRef?.click()">
           <template #icon><i class="i-carbon:upload" /></template>
           上传牛顿环图像
         </n-button>
-        <n-tag v-if="fileName" :bordered="false" round>{{ fileName }} · {{ imgWidth }}×{{ imgHeight }}</n-tag>
+        <n-tag v-if="fileName" :bordered="false" round
+          >{{ fileName }} · {{ imgWidth }}×{{ imgHeight }}</n-tag
+        >
         <span class="text-xs opacity-50">支持拖拽图片到页面任意处</span>
       </n-space>
     </n-card>
@@ -857,7 +917,11 @@ onUnmounted(() => {
           <span class="opacity-50">{{ l.time }}</span>
           <span
             :class="
-              l.type === 'error' ? 'text-red-500' : l.type === 'success' ? 'text-green-500' : 'opacity-80'
+              l.type === 'error'
+                ? 'text-red-500'
+                : l.type === 'success'
+                  ? 'text-green-500'
+                  : 'opacity-80'
             "
           >
             {{ l.msg }}
@@ -908,7 +972,12 @@ onUnmounted(() => {
           <span class="text-sm">圆心 Y</span>
           <n-input-number v-model:value="detectedCenter.y" size="small" :step="1" class="!w-28" />
           <n-button size="small" @click="redetectCenter">重新检测</n-button>
-          <n-button size="small" type="primary" :loading="isProcessing" @click="confirmCenterAndDetectRings">
+          <n-button
+            size="small"
+            type="primary"
+            :loading="isProcessing"
+            @click="confirmCenterAndDetectRings"
+          >
             确认圆心并识别暗环
           </n-button>
         </n-space>
@@ -917,17 +986,27 @@ onUnmounted(() => {
       <!-- 环编辑提示 -->
       <div v-else-if="centerPhase === 'done'" class="mt-3">
         <n-alert type="success" :bordered="false">
-          已识别 {{ enabledRings.length }} 个启用环（人工补入 {{ manualRingCount }} 个）。点击图像可直接补环，或在下方表1调整。
+          已识别 {{ enabledRings.length }} 个启用环（人工补入
+          {{ manualRingCount }} 个）。点击图像可直接补环，或在下方表1调整。
         </n-alert>
       </div>
     </n-card>
 
     <!-- 环人工核对（表1）+ 参数 -->
-    <n-card v-if="centerPhase === 'done'" :bordered="false" class="bg-card" title="表1 · 环人工核对">
+    <n-card
+      v-if="centerPhase === 'done'"
+      :bordered="false"
+      class="bg-card"
+      title="表1 · 环人工核对"
+    >
       <template #header-extra>
         <n-space align="center" :size="10">
           <span class="text-xs opacity-60">顺延重排</span>
-          <n-switch v-model:value="renumberOnRemove" size="small" @update:value="onRenumberModeChange" />
+          <n-switch
+            v-model:value="renumberOnRemove"
+            size="small"
+            @update:value="onRenumberModeChange"
+          />
         </n-space>
       </template>
       <div class="overflow-x-auto">
@@ -962,8 +1041,12 @@ onUnmounted(() => {
                   @update:value="onRingNumberChange(ring)"
                 />
               </td>
-              <td class="border border-gray-400/30 px-3 py-1.5 text-center">{{ ring.avgRadius.toFixed(2) }}</td>
-              <td class="border border-gray-400/30 px-3 py-1.5 text-center">{{ (ring.avgRadius * 2).toFixed(2) }}</td>
+              <td class="border border-gray-400/30 px-3 py-1.5 text-center">
+                {{ ring.avgRadius.toFixed(2) }}
+              </td>
+              <td class="border border-gray-400/30 px-3 py-1.5 text-center">
+                {{ (ring.avgRadius * 2).toFixed(2) }}
+              </td>
               <td class="border border-gray-400/30 px-3 py-1.5 text-center">
                 {{ (ring.avgRadius * 2 * psNum).toFixed(3) }}
               </td>
@@ -992,7 +1075,8 @@ onUnmounted(() => {
         <n-button size="small" @click="router.push('/calibration')">去标定页获取标定值</n-button>
       </n-space>
       <p class="mt-2 text-xs opacity-50">
-        标定值未设定（空 / ≤0）时，直径 mm 与曲率半径按未设定处理；可手动输入或在标定页「应用到识别」。
+        标定值未设定（空 / ≤0）时，直径 mm
+        与曲率半径按未设定处理；可手动输入或在标定页「应用到识别」。
       </p>
     </n-card>
 
@@ -1022,11 +1106,15 @@ onUnmounted(() => {
               <n-slider v-model:value="filterParams.sharpen" :min="0" :max="2" :step="0.01" />
             </div>
             <div>
-              <div class="text-xs opacity-60">边缘增强 {{ filterParams.edgeEnhance.toFixed(2) }}</div>
+              <div class="text-xs opacity-60">
+                边缘增强 {{ filterParams.edgeEnhance.toFixed(2) }}
+              </div>
               <n-slider v-model:value="filterParams.edgeEnhance" :min="0" :max="1" :step="0.01" />
             </div>
             <div>
-              <div class="text-xs opacity-60">CLAHE clip {{ filterParams.claheClip.toFixed(1) }}</div>
+              <div class="text-xs opacity-60">
+                CLAHE clip {{ filterParams.claheClip.toFixed(1) }}
+              </div>
               <n-slider v-model:value="filterParams.claheClip" :min="1" :max="5" :step="0.1" />
             </div>
             <div>
@@ -1076,14 +1164,20 @@ onUnmounted(() => {
         @mouseleave="onZoomMouseLeave"
         @click="onZoomClick"
       >
-        <img :src="imgState.src" class="absolute left-0 top-0 select-none" :style="zoomImgStyle" alt="放大底图" />
+        <img
+          :src="imgState.src"
+          class="absolute left-0 top-0 select-none"
+          :style="zoomImgStyle"
+          alt="放大底图"
+        />
         <canvas ref="zoomCanvasRef" class="pointer-events-none absolute inset-0" />
       </div>
       <div class="mt-2 flex items-center justify-between text-xs opacity-60">
         <span>
           缩放 {{ zoomScale.toFixed(2) }}x
           <template v-if="zoomCursor?.inside">
-            · 光标 ({{ zoomCursor.x.toFixed(0) }}, {{ zoomCursor.y.toFixed(0) }}) · 半径 {{ zoomCursor.r.toFixed(1) }}px
+            · 光标 ({{ zoomCursor.x.toFixed(0) }}, {{ zoomCursor.y.toFixed(0) }}) · 半径
+            {{ zoomCursor.r.toFixed(1) }}px
           </template>
         </span>
         <n-space :size="8">

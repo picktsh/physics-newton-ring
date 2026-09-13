@@ -52,7 +52,8 @@ export function roundHalfEven(x, decimals) {
   const floor = Math.floor(scaled)
   const frac = scaled - floor
   let n
-  if (Math.abs(frac - 0.5) < 1e-9) n = floor % 2 === 0 ? floor : floor + 1 // 五成双: 奇进偶舍
+  if (Math.abs(frac - 0.5) < 1e-9)
+    n = floor % 2 === 0 ? floor : floor + 1 // 五成双: 奇进偶舍
   else n = frac > 0.5 ? floor + 1 : floor // 四舍六入
   return (n / f).toFixed(decimals)
 }

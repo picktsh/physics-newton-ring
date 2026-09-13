@@ -51,5 +51,13 @@ export function themeOverridesOf(mode) {
       fontFamily:
         "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif",
     },
+    // Layout 家族（n-layout / sider / header / footer）的色板按组件粒度覆盖，不靠原子类压层叠：
+    // 默认 siderColor = cardColor（深色下比预期的 --c-layout 浅），侧栏需更暗的底；
+    // headerColor = cardColor、color = bodyColor 已恰好等于我们的 card / base，无需覆盖。
+    peers: {
+      Layout: {
+        siderColor: p.layout,
+      },
+    },
   }
 }

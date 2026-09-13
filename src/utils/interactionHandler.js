@@ -9,7 +9,12 @@ function getEnabledRings(imageManager) {
 }
 
 // 初始化 Canvas 交互 (鼠标悬停检测暗环)
-export function initCanvasInteraction(resultImageRef, resultCanvasRef, imageManager, hoveredRingRef) {
+export function initCanvasInteraction(
+  resultImageRef,
+  resultCanvasRef,
+  imageManager,
+  hoveredRingRef,
+) {
   const img = resultImageRef.value
   const canvas = resultCanvasRef.value
   if (!img || !canvas) return

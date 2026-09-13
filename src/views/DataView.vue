@@ -46,7 +46,7 @@ function loadSession() {
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-4xl flex-col gap-4">
+  <div class="flex max-w-4xl flex-col gap-4">
     <n-card :bordered="false" class="bg-card" title="数据展示 · 导入测量结果 JSON">
       <n-space vertical :size="12">
         <n-upload

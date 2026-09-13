@@ -70,7 +70,7 @@ function clearAll() {
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-5xl flex-col gap-4">
+  <div class="flex max-w-5xl flex-col gap-4">
     <n-card :bordered="false" class="bg-card">
       <div class="flex items-center justify-between">
         <div>
@@ -94,15 +94,26 @@ function clearAll() {
       </div>
     </n-card>
 
-    <n-empty v-if="!records.length" description="暂无历史记录，去识别页测量后会自动留存" class="py-16" />
+    <n-empty
+      v-if="!records.length"
+      description="暂无历史记录，去识别页测量后会自动留存"
+      class="py-16"
+    />
 
     <n-grid v-else :x-gap="16" :y-gap="16" cols="1 sm:2" responsive="screen">
       <n-grid-item v-for="r in records" :key="r.id">
-        <n-card :bordered="false" class="bg-card h-full" content-style="display:flex;flex-direction:column;gap:10px;">
-          <div
-            class="flex h-40 items-center justify-center overflow-hidden rounded bg-black/5"
-          >
-            <img v-if="r.image" :src="r.image" alt="缩略图" class="max-h-full max-w-full object-contain" />
+        <n-card
+          :bordered="false"
+          class="bg-card h-full"
+          content-style="display:flex;flex-direction:column;gap:10px;"
+        >
+          <div class="flex h-40 items-center justify-center overflow-hidden rounded bg-black/5">
+            <img
+              v-if="r.image"
+              :src="r.image"
+              alt="缩略图"
+              class="max-h-full max-w-full object-contain"
+            />
             <i v-else class="i-carbon:image text-4xl opacity-30" />
           </div>
           <div class="truncate font-medium" :title="r.title">{{ r.title }}</div>

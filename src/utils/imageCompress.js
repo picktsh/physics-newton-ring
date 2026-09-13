@@ -6,7 +6,10 @@ import { IMAGE_MAX_EDGE, IMAGE_QUALITY } from './constants'
  * @param {{ maxEdge?: number, quality?: number }} [opts]
  * @returns {Promise<string>} 压缩后的 JPEG dataURL
  */
-export function compressImageDataUrl(dataUrl, { maxEdge = IMAGE_MAX_EDGE, quality = IMAGE_QUALITY } = {}) {
+export function compressImageDataUrl(
+  dataUrl,
+  { maxEdge = IMAGE_MAX_EDGE, quality = IMAGE_QUALITY } = {},
+) {
   return new Promise((resolve, reject) => {
     const img = new Image()
     img.onload = () => {

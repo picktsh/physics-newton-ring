@@ -136,7 +136,8 @@ export function toMarkdown(payload) {
 export function toHTMLPage(payload) {
   const { diameterData, radiusData, averageR, pixelScale, uncertainty, fileName, exportedAt } =
     payload
-  const esc = (s) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+  const esc = (s) =>
+    String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c])
   const rows1 = diameterData
     .map(
       (it) =>

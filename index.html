@@ -5,6 +5,13 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>牛顿环测量工具</title>
+    <!-- naive-ui / vueuc 运行时样式注入锚点：它们的 <style> 会被插到各自 meta 之前，
+         于是我们自己的 UnoCSS / global.css（Vite 追加到 head 末尾）恒定排在后面，
+         同特异性时以我们的原子类为准。顺序不可颠倒（naive-ui 在前、vueuc 在后），
+         且两个 meta 必须是 head 的最后几个元素，否则构建后 <link> 会排到它们前面。
+         见 https://www.naiveui.com/zh-CN/os-theme/docs/style-conflict -->
+    <meta name="naive-ui-style" />
+    <meta name="vueuc-style" />
   </head>
   <body>
     <div id="app"></div>

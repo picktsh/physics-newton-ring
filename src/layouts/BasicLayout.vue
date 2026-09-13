@@ -2,23 +2,17 @@
 import { ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useBreakpoints, breakpointsTailwind, useStorage } from '@vueuse/core'
-import {
-  NLayout,
-  NLayoutSider,
-  NLayoutHeader,
-  NLayoutContent,
-  NButton,
-  NDrawer,
-  NWatermark,
-  NSwitch,
-} from 'naive-ui'
-import { useTheme } from '@/composables/useTheme'
-import SideNav from '@/components/SideNav.vue'
-import SiteQrcode from '@/components/SiteQrcode.vue'
+import { NDrawer, NLayout, NScrollbar, NWatermark } from 'naive-ui'
+import AppHeader from '@/layouts/AppHeader.vue'
+import AppSider from '@/layouts/AppSider.vue'
+import AppContent from '@/layouts/AppContent.vue'
+import AppNavMenu from '@/layouts/AppNavMenu.vue'
 import { WATERMARK_KEY } from '@/utils/constants'
 
+// §4 布局壳（参考 naive-ui 官网）：页头全宽固定不滚动；
+// 页头下方左右分栏 —— 左侧菜单高度铺满、内部独立滚动，右侧主内容（含 sticky 页脚）内部滚动。
 const route = useRoute()
-const { isDark, toggleTheme } = useTheme()
+
 // §3 水印开关持久化
 const watermarkOn = useStorage(WATERMARK_KEY, true)
 
@@ -46,74 +40,42 @@ function toggleMenu() {
   <!-- §3 全屏水印 + 顶栏开关 -->
   <n-watermark
     v-if="watermarkOn"
-    :font-size="14"
+    :font-size="20"
     :global-rotate="-15"
     :height="300"
+    :line-height="150"
     :width="400"
     :z-index="1500"
     content="牛顿环测量工具"
-    cross
+    font-color="rgba(128, 128, 128, .08)"
     fullscreen
   />
-  <!-- h-screen(100vh) 直接锚定视口，不依赖 #app→provider 的百分比高度链，保证铺满 -->
-  <n-layout :has-sider="!isMobile" class="h-screen">
-    <!-- PC / 平板：可折叠侧栏（naive-ui 内置宽度过渡动画） -->
-    <n-layout-sider
-      v-if="!isMobile"
-      v-model:collapsed="collapsed"
-      bordered
-      :width="240"
-      :collapsed-width="64"
-      :native-scrollbar="false"
-      collapse-mode="width"
-      class="relative bg-layout"
-    >
-      <side-nav :collapsed="collapsed" />
-      <!-- 侧栏底部二维码：折叠时隐藏（移动端在抽屉外，不渲染） -->
-      <div
-        v-show="!collapsed"
-        class="absolute inset-x-0 bottom-0 border-t border-gray-500/20 px-4 py-4"
-      >
-        <site-qrcode />
-      </div>
-    </n-layout-sider>
 
-    <!-- 移动端：左滑抽屉导航（内置滑动动画） -->
+  <!-- h-screen(100vh) 直接锚定视口：整页不滚动，滚动只发生在侧栏菜单与主内容区内部 -->
+  <div class="flex h-screen flex-col overflow-hidden">
+    <app-header v-model:watermark-on="watermarkOn" @toggle-menu="toggleMenu" />
+
+    <!-- 分栏区：页头全宽固定，其下左（侧栏）右（主内容）分栏，两栏各自内部滚动。
+         flex-1 / min-h-0 能稳定覆盖 naive-ui 的 .n-layout{flex:auto}（依赖 index.html 的样式锚点 meta）。
+         native-scrollbar=false 才会给分栏容器加 has-sider 的 flex 行布局，并用 n-scrollbar 接管滚动；
+         content-style 给分栏容器确定高度，移动端（无侧栏、block 堆叠）也靠它避免退化成整页滚动 -->
+    <n-layout
+      :has-sider="!isMobile"
+      :native-scrollbar="false"
+      content-style="height: 100%"
+      class="min-h-0 flex-1"
+    >
+      <app-sider v-if="!isMobile" :collapsed="collapsed" />
+      <app-content />
+    </n-layout>
+
+    <!-- 移动端：左滑抽屉导航（内置滑动动画），菜单内部滚动；二维码只在 PC 侧栏显示 -->
     <n-drawer v-model:show="drawerVisible" placement="left" :width="264">
-      <div class="flex h-full flex-col bg-layout">
-        <side-nav @select="drawerVisible = false" />
+      <div class="h-full bg-layout">
+        <n-scrollbar>
+          <app-nav-menu @select="drawerVisible = false" />
+        </n-scrollbar>
       </div>
     </n-drawer>
-
-    <n-layout>
-      <n-layout-header bordered class="flex h-14 items-center bg-card px-4 md:px-5">
-        <!-- 菜单按钮：移动端开抽屉 / PC 折叠侧栏，统一放头部左侧 -->
-        <n-button quaternary circle class="mr-2" @click="toggleMenu">
-          <i class="i-carbon:menu text-lg" />
-        </n-button>
-        <span class="text-sm opacity-70">{{ route.meta.title }}</span>
-        <!-- §3 水印开关（顶栏） -->
-        <n-switch v-model:value="watermarkOn" size="small" class="ml-auto mr-3" title="水印开关" />
-        <!-- 右上角主题切换（参考 naive-ui 官网）；选择持久化到 localStorage -->
-        <n-button
-          quaternary
-          circle
-          :title="isDark ? '切换到浅色主题' : '切换到深色主题'"
-          @click="toggleTheme"
-        >
-          <i :class="isDark ? 'i-carbon:moon' : 'i-carbon:sun'" class="text-lg" />
-        </n-button>
-      </n-layout-header>
-      <n-layout-content :native-scrollbar="false" class="bg-base">
-        <!-- 响应式内边距 + 路由切换过渡动画 -->
-        <div class="p-4 md:p-6">
-          <router-view v-slot="{ Component }">
-            <transition name="fade-slide" mode="out-in">
-              <component :is="Component" />
-            </transition>
-          </router-view>
-        </div>
-      </n-layout-content>
-    </n-layout>
-  </n-layout>
+  </div>
 </template>

@@ -495,7 +495,10 @@ function detectDarkRingsRadial(grayMat, centerX, centerY, maxRadius) {
       }
     }
     // Savitzky-Golay 平滑 (窗口5, 二次多项式)
-    const smoothed = savitzkyGolaySmooth(profile.map((p) => p.intensity), 5)
+    const smoothed = savitzkyGolaySmooth(
+      profile.map((p) => p.intensity),
+      5,
+    )
     for (let i = 0; i < profile.length; i++) {
       profile[i].smoothedIntensity = smoothed[i]
     }

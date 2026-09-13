@@ -36,7 +36,8 @@ const calibAutoDistance = computed(() => {
   return Math.abs(calibScaleA.value - calibScaleB.value)
 })
 const calibPhysicalDistance = computed(() => {
-  if (calibDistanceManual.value != null && calibDistanceManual.value > 0) return calibDistanceManual.value
+  if (calibDistanceManual.value != null && calibDistanceManual.value > 0)
+    return calibDistanceManual.value
   return calibAutoDistance.value
 })
 watch(calibAutoDistance, (v) => {
@@ -73,8 +74,12 @@ const overlayReady = computed(
 const overlaySizeMismatch = computed(
   () => !!(calibImageA.value && calibImageB.value && !overlayReady.value),
 )
-const overlayMaxX = computed(() => (overlayReady.value ? Math.round(calibImageA.value.width / 2) : 0))
-const overlayMaxY = computed(() => (overlayReady.value ? Math.round(calibImageA.value.height / 2) : 0))
+const overlayMaxX = computed(() =>
+  overlayReady.value ? Math.round(calibImageA.value.width / 2) : 0,
+)
+const overlayMaxY = computed(() =>
+  overlayReady.value ? Math.round(calibImageA.value.height / 2) : 0,
+)
 
 // ===== 闪烁对比 =====
 const BLINK_INTERVAL = 600
@@ -139,7 +144,9 @@ const cropRadiusMin = 20
 const calibIsCropped = computed(() => !!croppedOriginals.value)
 const cropReady = computed(() => overlayReady.value && !calibIsCropped.value)
 const cropRadiusMax = computed(() =>
-  overlayReady.value ? Math.floor(Math.min(calibImageA.value.width, calibImageA.value.height) / 2) : 0,
+  overlayReady.value
+    ? Math.floor(Math.min(calibImageA.value.width, calibImageA.value.height) / 2)
+    : 0,
 )
 watch(
   cropReady,
@@ -150,7 +157,9 @@ watch(
         x: Math.round(calibImageA.value.width / 2),
         y: Math.round(calibImageA.value.height / 2),
       }
-      cropRadius.value = Math.round(Math.min(calibImageA.value.width, calibImageA.value.height) * 0.3)
+      cropRadius.value = Math.round(
+        Math.min(calibImageA.value.width, calibImageA.value.height) * 0.3,
+      )
     }
   },
   { immediate: true },
@@ -218,7 +227,10 @@ function clampCropCenter() {
 watch([cropRadius, cropCenter], clampCropCenter, { deep: true })
 function adjustCropRadius(delta) {
   if (!cropReady.value) return
-  cropRadius.value = Math.max(cropRadiusMin, Math.min(cropRadiusMax.value, cropRadius.value + delta))
+  cropRadius.value = Math.max(
+    cropRadiusMin,
+    Math.min(cropRadiusMax.value, cropRadius.value + delta),
+  )
 }
 function onCropMouseDown(e) {
   if (!cropReady.value || !cropCenter.value || cropBusy.value) return
@@ -344,7 +356,12 @@ function handleCalibUpload(slot, file) {
   reader.onload = (e) => {
     const img = new Image()
     img.onload = () => {
-      const data = { src: e.target.result, name: file.name, width: img.naturalWidth, height: img.naturalHeight }
+      const data = {
+        src: e.target.result,
+        name: file.name,
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+      }
       if (slot === 'A') calibImageA.value = data
       else calibImageB.value = data
       calibPointPairs.value = []
@@ -424,7 +441,10 @@ async function runOverlayAutoAlign() {
   overlayFineBusy.value = true
   overlayFineMsg.value = '🤖 正在自动全局对齐（整图相关求解平移）…'
   try {
-    const res = await solveGlobalTranslation({ src: calibImageA.value.src }, { src: calibImageB.value.src })
+    const res = await solveGlobalTranslation(
+      { src: calibImageA.value.src },
+      { src: calibImageB.value.src },
+    )
     if (!res.ok) {
       overlayFineMsg.value = `⚠️ 自动对齐未能可靠求解，位置保持不变：${res.message || 'PSR 不足'} → 建议改用手动对齐（滑块/方向键 + 闪烁对比）`
       return
@@ -463,14 +483,17 @@ async function runOverlayCheck() {
       overlayFineMsg.value = `❌ 无法检查对齐：${res.message || '失败'}`
       return
     }
-    checkCenters.value = res.centerA && res.centerB ? { centerA: res.centerA, centerB: res.centerB } : null
+    checkCenters.value =
+      res.centerA && res.centerB ? { centerA: res.centerA, centerB: res.centerB } : null
     nextTick(drawOverlayCanvas)
     const devText = res.dev.toFixed(2)
     const psrText = res.psr != null ? `PSR ${res.psr.toFixed(1)}` : ''
     if (res.dev <= 2) {
       overlayFineMsg.value = `✅ 对齐准确：残差 ${devText}px (${psrText})，可直接点「确定对齐」锁定取点${res.crossWarn || ''}`
     } else {
-      const sugText = res.suggestion ? describeShiftDirection(res.suggestion.dx, res.suggestion.dy) : ''
+      const sugText = res.suggestion
+        ? describeShiftDirection(res.suggestion.dx, res.suggestion.dy)
+        : ''
       overlayFineMsg.value = `⚠️ 对齐不够：残差 ${devText}px (${psrText})${sugText ? ` → 建议把圆环${sugText}` : ''}；可继续手动微调或自动全局对齐${res.crossWarn || ''}`
     }
   } catch (err) {
@@ -572,7 +595,16 @@ function drawOverlayCanvas() {
   }
   const pairs = calibPointPairs.value
   if (!pairs.length) return
-  const COLORS = ['#e74c3c', '#2980b9', '#27ae60', '#f39c12', '#8e44ad', '#16a085', '#d35400', '#c0392b']
+  const COLORS = [
+    '#e74c3c',
+    '#2980b9',
+    '#27ae60',
+    '#f39c12',
+    '#8e44ad',
+    '#16a085',
+    '#d35400',
+    '#c0392b',
+  ]
   pairs.forEach((p, i) => {
     const x = p.a.x * s
     const y = p.a.y * s
@@ -591,9 +623,13 @@ function drawOverlayCanvas() {
     ctx.fillText(String(i + 1), x + 8, y - 6)
   })
 }
-watch([calibPointPairs, overlayDx, overlayDy], () => {
-  if (overlayReady.value) nextTick(drawOverlayCanvas)
-}, { deep: true })
+watch(
+  [calibPointPairs, overlayDx, overlayDy],
+  () => {
+    if (overlayReady.value) nextTick(drawOverlayCanvas)
+  },
+  { deep: true },
+)
 
 // ===== 标定值计算（4 位有效数字，先修约再平均）=====
 function roundToSigFigs(num, sig) {
@@ -638,7 +674,10 @@ const calibValueSigFigs = computed(() =>
 )
 const calibValue = computed(() => {
   if (calibAvgDistance.value <= 0 || calibPhysicalDistance.value <= 0) return 0
-  return roundToSigFigs(calibPhysicalDistance.value / calibAvgDistance.value, calibValueSigFigs.value)
+  return roundToSigFigs(
+    calibPhysicalDistance.value / calibAvgDistance.value,
+    calibValueSigFigs.value,
+  )
 })
 const calibValueText = computed(() =>
   calibValueSigFigs.value ? formatSigFigs(calibValue.value, calibValueSigFigs.value) : '—',
@@ -668,10 +707,18 @@ function onCalibKeydown(e) {
     e.preventDefault()
     const step = e.shiftKey ? 5 : 1
     switch (e.key) {
-      case 'ArrowUp': shiftOverlayBy(0, -step); break
-      case 'ArrowDown': shiftOverlayBy(0, step); break
-      case 'ArrowLeft': shiftOverlayBy(-step, 0); break
-      case 'ArrowRight': shiftOverlayBy(step, 0); break
+      case 'ArrowUp':
+        shiftOverlayBy(0, -step)
+        break
+      case 'ArrowDown':
+        shiftOverlayBy(0, step)
+        break
+      case 'ArrowLeft':
+        shiftOverlayBy(-step, 0)
+        break
+      case 'ArrowRight':
+        shiftOverlayBy(step, 0)
+        break
     }
   }
 }
@@ -693,7 +740,13 @@ function saveSession() {
     try {
       sessionStorage.setItem(
         CALIB_IMAGES_KEY,
-        JSON.stringify({ imageA: null, imageB: null, scaleA: calibScaleA.value, scaleB: calibScaleB.value, distanceManual: calibDistanceManual.value }),
+        JSON.stringify({
+          imageA: null,
+          imageB: null,
+          scaleA: calibScaleA.value,
+          scaleB: calibScaleB.value,
+          distanceManual: calibDistanceManual.value,
+        }),
       )
     } catch {
       /* 配额不足，忽略 */
@@ -738,13 +791,16 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="mx-auto flex max-w-6xl flex-col gap-4">
+  <div class="flex max-w-6xl flex-col gap-4">
     <!-- 操作说明 -->
     <n-card :bordered="false" class="bg-card" title="像素标定 · 操作流程">
       <ol class="list-decimal space-y-1 pl-5 text-sm opacity-75">
         <li>上传同一机位、鼓轮两个刻度下拍摄的图A / 图B（须同尺寸）。</li>
         <li>可选：在图A上框选圆形区域截取（同坐标同步应用到图B），排除边缘干扰。</li>
-        <li>叠加对齐：拖 Δx/Δy 滑块或方向键粗对齐，可「闪烁对比」看错位跳动；或「自动全局对齐」一键求解，再「检查对齐」复核残差。</li>
+        <li>
+          叠加对齐：拖 Δx/Δy
+          滑块或方向键粗对齐，可「闪烁对比」看错位跳动；或「自动全局对齐」一键求解，再「检查对齐」复核残差。
+        </li>
         <li>点「确定对齐」锁定，然后在叠加画面上点击取点（可多组）。</li>
         <li>输入鼓轮刻度或实际移动距离，得到标定值（mm/像素），点「应用到识别」。</li>
       </ol>
@@ -752,8 +808,14 @@ onUnmounted(() => {
 
     <!-- 上传 + 刻度 -->
     <n-card :bordered="false" class="bg-card" title="① 图像与鼓轮刻度">
-     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <input ref="hiddenFileInput" type="file" accept="image/*" class="hidden" @change="onHiddenChange" />
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <input
+          ref="hiddenFileInput"
+          type="file"
+          accept="image/*"
+          class="hidden"
+          @change="onHiddenChange"
+        />
         <div v-for="slot in ['A', 'B']" :key="slot" class="flex flex-col gap-2">
           <n-space align="center" :size="8">
             <span class="font-medium">图{{ slot }}</span>
@@ -771,7 +833,9 @@ onUnmounted(() => {
           <div class="text-xs opacity-60">
             <template v-if="slot === 'A' ? calibImageA : calibImageB">
               {{ (slot === 'A' ? calibImageA : calibImageB).name }} ·
-              {{ (slot === 'A' ? calibImageA : calibImageB).width }}×{{ (slot === 'A' ? calibImageA : calibImageB).height }}
+              {{ (slot === 'A' ? calibImageA : calibImageB).width }}×{{
+                (slot === 'A' ? calibImageA : calibImageB).height
+              }}
             </template>
             <template v-else>未上传</template>
           </div>
@@ -792,10 +856,17 @@ onUnmounted(() => {
       <n-space align="center" wrap :size="16">
         <n-space align="center" :size="8">
           <span class="text-sm">实际移动距离 (mm)</span>
-          <n-input-number v-model:value="calibDistanceManual" size="small" :step="0.001" class="!w-36" />
+          <n-input-number
+            v-model:value="calibDistanceManual"
+            size="small"
+            :step="0.001"
+            class="!w-36"
+          />
         </n-space>
         <n-tag :bordered="false" round>刻度差自动值：{{ calibAutoDistance.toFixed(3) }} mm</n-tag>
-        <n-tag type="info" :bordered="false" round>采用距离 L：{{ calibPhysicalDistance.toFixed(3) }} mm</n-tag>
+        <n-tag type="info" :bordered="false" round
+          >采用距离 L：{{ calibPhysicalDistance.toFixed(3) }} mm</n-tag
+        >
       </n-space>
       <n-alert v-if="overlaySizeMismatch" type="error" :bordered="false" class="mt-3">
         两图尺寸不一致，无法叠加对齐。请确认是同机位、同分辨率拍摄。
@@ -805,10 +876,14 @@ onUnmounted(() => {
     <!-- 圆形截取 -->
     <n-card v-if="overlayReady" :bordered="false" class="bg-card" title="② 圆形截取（可选）">
       <template #header-extra>
-        <n-tag v-if="calibIsCropped" type="warning" :bordered="false" round size="small">已截取</n-tag>
+        <n-tag v-if="calibIsCropped" type="warning" :bordered="false" round size="small"
+          >已截取</n-tag
+        >
       </template>
       <div v-if="calibIsCropped" class="flex flex-col items-center gap-3">
-        <p class="text-sm opacity-70">当前为截取后的 {{ calibImageA.width }}×{{ calibImageA.height }} 区域。</p>
+        <p class="text-sm opacity-70">
+          当前为截取后的 {{ calibImageA.width }}×{{ calibImageA.height }} 区域。
+        </p>
         <n-button size="small" @click="restoreCrop">重新裁剪（恢复原图）</n-button>
       </div>
       <div v-else class="flex flex-col items-center gap-3">
@@ -823,7 +898,9 @@ onUnmounted(() => {
           <div :style="cropHandleStyle" @mousedown="onCropResizeStart" />
         </div>
         <div class="w-full max-w-md">
-          <div class="text-xs opacity-60">截取半径 {{ cropRadius }} px（拖红圈移动 / 拖东侧手柄改半径 / +− 键微调）</div>
+          <div class="text-xs opacity-60">
+            截取半径 {{ cropRadius }} px（拖红圈移动 / 拖东侧手柄改半径 / +− 键微调）
+          </div>
           <n-slider
             :value="cropRadius"
             :min="cropRadiusMin"
@@ -835,7 +912,9 @@ onUnmounted(() => {
         <n-space align="center" :size="8">
           <n-button size="small" @click="adjustCropRadius(-10)">半径 −</n-button>
           <n-button size="small" @click="adjustCropRadius(10)">半径 +</n-button>
-          <n-button size="small" type="primary" :loading="cropBusy" @click="confirmCrop">确认截取（两图同步）</n-button>
+          <n-button size="small" type="primary" :loading="cropBusy" @click="confirmCrop"
+            >确认截取（两图同步）</n-button
+          >
         </n-space>
         <div class="text-xs opacity-60">{{ cropInfoText }}</div>
       </div>
@@ -877,7 +956,12 @@ onUnmounted(() => {
               :max="overlayMaxX"
               :step="0.01"
               :disabled="overlayLocked"
-              @update:value="(v) => { overlayDx = v; onOverlayOffsetInput() }"
+              @update:value="
+                (v) => {
+                  overlayDx = v
+                  onOverlayOffsetInput()
+                }
+              "
             />
           </div>
           <div>
@@ -888,36 +972,77 @@ onUnmounted(() => {
               :max="overlayMaxY"
               :step="0.01"
               :disabled="overlayLocked"
-              @update:value="(v) => { overlayDy = v; onOverlayOffsetInput() }"
+              @update:value="
+                (v) => {
+                  overlayDy = v
+                  onOverlayOffsetInput()
+                }
+              "
             />
           </div>
         </div>
 
         <n-space wrap :size="8">
-          <n-button size="small" :disabled="overlayLocked" @click="shiftOverlayBy(-1, 0)">← 左移</n-button>
-          <n-button size="small" :disabled="overlayLocked" @click="shiftOverlayBy(1, 0)">右移 →</n-button>
-          <n-button size="small" :disabled="overlayLocked" @click="shiftOverlayBy(0, -1)">↑ 上移</n-button>
-          <n-button size="small" :disabled="overlayLocked" @click="shiftOverlayBy(0, 1)">下移 ↓</n-button>
-          <n-button size="small" :disabled="overlayLocked" @click="resetOverlayShift">复位</n-button>
+          <n-button size="small" :disabled="overlayLocked" @click="shiftOverlayBy(-1, 0)"
+            >← 左移</n-button
+          >
+          <n-button size="small" :disabled="overlayLocked" @click="shiftOverlayBy(1, 0)"
+            >右移 →</n-button
+          >
+          <n-button size="small" :disabled="overlayLocked" @click="shiftOverlayBy(0, -1)"
+            >↑ 上移</n-button
+          >
+          <n-button size="small" :disabled="overlayLocked" @click="shiftOverlayBy(0, 1)"
+            >下移 ↓</n-button
+          >
+          <n-button size="small" :disabled="overlayLocked" @click="resetOverlayShift"
+            >复位</n-button
+          >
           <n-button size="small" :disabled="overlayLocked" @click="toggleOverlayBlink">
             {{ overlayBlinkOn ? '停止闪烁' : '闪烁对比' }}
           </n-button>
-          <n-button size="small" type="info" :loading="overlayFineBusy" :disabled="overlayLocked" @click="runOverlayAutoAlign">
+          <n-button
+            size="small"
+            type="info"
+            :loading="overlayFineBusy"
+            :disabled="overlayLocked"
+            @click="runOverlayAutoAlign"
+          >
             自动全局对齐
           </n-button>
           <n-button size="small" :loading="overlayCheckBusy" @click="runOverlayCheck">
             检查对齐
           </n-button>
-          <n-button size="small" :type="overlayLocked ? 'warning' : 'primary'" @click="toggleOverlayLock">
+          <n-button
+            size="small"
+            :type="overlayLocked ? 'warning' : 'primary'"
+            @click="toggleOverlayLock"
+          >
             {{ overlayLocked ? '🔓 解锁对齐' : '🔒 确定对齐' }}
           </n-button>
         </n-space>
 
-        <n-alert v-if="overlayFineMsg" :bordered="false" :type="overlayFineMsg.startsWith('✅') ? 'success' : overlayFineMsg.startsWith('⚠️') ? 'warning' : overlayFineMsg.startsWith('❌') ? 'error' : 'info'">
+        <n-alert
+          v-if="overlayFineMsg"
+          :bordered="false"
+          :type="
+            overlayFineMsg.startsWith('✅')
+              ? 'success'
+              : overlayFineMsg.startsWith('⚠️')
+                ? 'warning'
+                : overlayFineMsg.startsWith('❌')
+                  ? 'error'
+                  : 'info'
+          "
+        >
           {{ overlayFineMsg }}
         </n-alert>
         <p class="text-xs opacity-50">
-          提示：{{ overlayBlendMode === 'gray' ? '两图去色后叠加，排除色彩干扰，重影消失即对齐' : '图B以 50% 透明度彩色叠加，重影消失即对齐' }}；锁定后点击画面取点。
+          提示：{{
+            overlayBlendMode === 'gray'
+              ? '两图去色后叠加，排除色彩干扰，重影消失即对齐'
+              : '图B以 50% 透明度彩色叠加，重影消失即对齐'
+          }}；锁定后点击画面取点。
         </p>
       </div>
     </n-card>
@@ -925,9 +1050,15 @@ onUnmounted(() => {
     <!-- 特征点 + 标定值 -->
     <n-card v-if="overlayReady" :bordered="false" class="bg-card" title="④ 特征点与标定值">
       <template #header-extra>
-        <n-button v-if="calibPointPairs.length" size="small" quaternary @click="clearPairs">清空取点</n-button>
+        <n-button v-if="calibPointPairs.length" size="small" quaternary @click="clearPairs"
+          >清空取点</n-button
+        >
       </template>
-      <n-empty v-if="!calibPointPairs.length" description="尚未取点：锁定对齐后点击叠加画面" class="py-6" />
+      <n-empty
+        v-if="!calibPointPairs.length"
+        description="尚未取点：锁定对齐后点击叠加画面"
+        class="py-6"
+      />
       <div v-else class="overflow-x-auto">
         <table class="w-full border-collapse text-sm">
           <thead>
@@ -945,14 +1076,28 @@ onUnmounted(() => {
           <tbody>
             <tr v-for="row in calibPairRows" :key="row.id">
               <td class="border border-gray-400/30 px-2 py-1 text-center">{{ row.id + 1 }}</td>
-              <td class="border border-gray-400/30 px-2 py-1 text-center">({{ row.ax.toFixed(2) }}, {{ row.ay.toFixed(2) }})</td>
-              <td class="border border-gray-400/30 px-2 py-1 text-center">({{ row.bx.toFixed(2) }}, {{ row.by.toFixed(2) }})</td>
-              <td class="border border-gray-400/30 px-2 py-1 text-center">{{ row.dx.toFixed(2) }}</td>
-              <td class="border border-gray-400/30 px-2 py-1 text-center">{{ row.dy.toFixed(2) }}</td>
-              <td class="border border-gray-400/30 px-2 py-1 text-center">{{ row.dist.toFixed(2) }}</td>
-              <td class="border border-gray-400/30 px-2 py-1 text-center">{{ row.value ? row.value.toFixed(4) : '—' }}</td>
               <td class="border border-gray-400/30 px-2 py-1 text-center">
-                <n-button size="tiny" quaternary type="error" @click="removePair(row.id)">删除</n-button>
+                ({{ row.ax.toFixed(2) }}, {{ row.ay.toFixed(2) }})
+              </td>
+              <td class="border border-gray-400/30 px-2 py-1 text-center">
+                ({{ row.bx.toFixed(2) }}, {{ row.by.toFixed(2) }})
+              </td>
+              <td class="border border-gray-400/30 px-2 py-1 text-center">
+                {{ row.dx.toFixed(2) }}
+              </td>
+              <td class="border border-gray-400/30 px-2 py-1 text-center">
+                {{ row.dy.toFixed(2) }}
+              </td>
+              <td class="border border-gray-400/30 px-2 py-1 text-center">
+                {{ row.dist.toFixed(2) }}
+              </td>
+              <td class="border border-gray-400/30 px-2 py-1 text-center">
+                {{ row.value ? row.value.toFixed(4) : '—' }}
+              </td>
+              <td class="border border-gray-400/30 px-2 py-1 text-center">
+                <n-button size="tiny" quaternary type="error" @click="removePair(row.id)"
+                  >删除</n-button
+                >
               </td>
             </tr>
           </tbody>
@@ -963,7 +1108,9 @@ onUnmounted(() => {
       <div class="flex flex-wrap items-end gap-6">
         <div>
           <div class="text-xs opacity-60">平均像素距离 N</div>
-          <div class="text-xl font-semibold">{{ calibAvgDistance ? calibAvgDistance.toFixed(2) : '—' }} px</div>
+          <div class="text-xl font-semibold">
+            {{ calibAvgDistance ? calibAvgDistance.toFixed(2) : '—' }} px
+          </div>
         </div>
         <div>
           <div class="text-xs opacity-60">实际移动距离 L</div>

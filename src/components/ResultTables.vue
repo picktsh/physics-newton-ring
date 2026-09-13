@@ -121,7 +121,9 @@ const finalLatex = computed(() =>
               <td class="border border-gray-400/30 px-3 py-1.5 text-center">{{ it.group }}</td>
               <td class="border border-gray-400/30 px-3 py-1.5 text-center">{{ it.m }}</td>
               <td class="border border-gray-400/30 px-3 py-1.5 text-center">{{ it.n }}</td>
-              <td class="border border-gray-400/30 px-3 py-1.5 text-center">{{ it.diffSquaredText }}</td>
+              <td class="border border-gray-400/30 px-3 py-1.5 text-center">
+                {{ it.diffSquaredText }}
+              </td>
               <td class="border border-gray-400/30 px-3 py-1.5 text-center">{{ it.radiusText }}</td>
             </tr>
           </tbody>
@@ -176,9 +178,15 @@ const finalLatex = computed(() =>
             <tbody>
               <tr v-for="(g, i) in u.perGroup" :key="`pg${i}`">
                 <td class="border border-gray-400/30 px-2 py-1 text-center">{{ g.group }}</td>
-                <td class="border border-gray-400/30 px-2 py-1 text-center">{{ g.Dm.toFixed(4) }}</td>
-                <td class="border border-gray-400/30 px-2 py-1 text-center">{{ g.Dn.toFixed(4) }}</td>
-                <td class="border border-gray-400/30 px-2 py-1 text-center">{{ g.diffSq.toFixed(4) }}</td>
+                <td class="border border-gray-400/30 px-2 py-1 text-center">
+                  {{ g.Dm.toFixed(4) }}
+                </td>
+                <td class="border border-gray-400/30 px-2 py-1 text-center">
+                  {{ g.Dn.toFixed(4) }}
+                </td>
+                <td class="border border-gray-400/30 px-2 py-1 text-center">
+                  {{ g.diffSq.toFixed(4) }}
+                </td>
                 <td class="border border-gray-400/30 px-2 py-1 text-center">
                   {{ (g.rel * 100).toFixed(4) }}%
                 </td>
