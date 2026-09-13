@@ -18,7 +18,6 @@ import {
   NInput,
   useMessage,
 } from 'naive-ui'
-import { loadOpenCv } from '@/utils/loadOpenCv'
 import {
   detectNewtonRingCenter,
   detectRingsWithCenter,
@@ -51,7 +50,6 @@ const { pixelScale, pixelScaleNumber, setSession } = useMeasureStore()
 const { add: addHistory } = useHistoryStore()
 
 // ===== 基础状态 =====
-const cvReady = ref(false)
 const isProcessing = ref(false)
 const logs = ref([])
 const logContainerRef = ref(null)
@@ -209,10 +207,6 @@ async function loadFiles(files) {
     message.error('请选择图片文件')
     return
   }
-  if (!cvReady.value) {
-    message.warning('OpenCV 尚在加载，请稍候…')
-    return
-  }
   const dataUrl = await readFileAsDataURL(file)
   const img = await dataURLToImage(dataUrl)
   fileName.value = file.name
@@ -231,8 +225,8 @@ function onFilePick(e) {
 
 // ===== 第一步：自动检测圆心 =====
 async function processImage() {
-  if (!imgState.src || !cvReady.value) {
-    return showStatus('❌ 请先上传图像并等待 OpenCV 加载', 'error')
+  if (!imgState.src) {
+    return showStatus('❌ 请先上传图像', 'error')
   }
   if (isProcessing.value) return showStatus('⏳ 正在处理中，请稍候…', 'info')
   isProcessing.value = true
@@ -816,18 +810,11 @@ function goExport() {
 }
 
 // ===== 生命周期 =====
-onMounted(async () => {
+onMounted(() => {
   document.addEventListener('keydown', onCenterKeydown)
   document.addEventListener('keydown', onZoomKeydown)
   window.addEventListener('resize', onZoomResize)
   initDragDrop(loadFiles, () => true)
-  try {
-    await loadOpenCv()
-    cvReady.value = true
-    showStatus('✅ OpenCV 已就绪，请上传或拖拽牛顿环图像', 'success')
-  } catch (e) {
-    showStatus(`❌ OpenCV 加载失败：${e.message}`, 'error')
-  }
 })
 onUnmounted(() => {
   cleanupCenterAdjust?.()
@@ -854,13 +841,10 @@ onUnmounted(() => {
     <n-card :bordered="false" class="bg-card">
       <n-space align="center" wrap :size="12">
         <input ref="fileInputRef" type="file" accept="image/*" class="hidden" @change="onFilePick" />
-        <n-button type="primary" :disabled="!cvReady" @click="fileInputRef?.click()">
+        <n-button type="primary" @click="fileInputRef?.click()">
           <template #icon><i class="i-carbon:upload" /></template>
           上传牛顿环图像
         </n-button>
-        <n-tag :type="cvReady ? 'success' : 'warning'" :bordered="false" round>
-          {{ cvReady ? 'OpenCV 就绪' : 'OpenCV 加载中…' }}
-        </n-tag>
         <n-tag v-if="fileName" :bordered="false" round>{{ fileName }} · {{ imgWidth }}×{{ imgHeight }}</n-tag>
         <span class="text-xs opacity-50">支持拖拽图片到页面任意处</span>
       </n-space>
@@ -882,8 +866,6 @@ onUnmounted(() => {
         <div v-if="!logs.length" class="opacity-40">暂无日志</div>
       </div>
     </n-card>
-
-    <n-alert v-if="!cvReady" type="info" :bordered="false">正在加载 OpenCV（首次约 10MB），请稍候…</n-alert>
 
     <!-- 主视图：原图 + 覆盖层 -->
     <n-card v-if="imgState.src" :bordered="false" class="bg-card" title="识别视图">

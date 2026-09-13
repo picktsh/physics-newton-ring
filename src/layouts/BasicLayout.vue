@@ -1,26 +1,23 @@
 <script setup>
-import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useBreakpoints, breakpointsTailwind, useStorage } from '@vueuse/core'
 import {
   NLayout,
   NLayoutSider,
   NLayoutHeader,
   NLayoutContent,
-  NMenu,
   NButton,
   NDrawer,
   NWatermark,
   NSwitch,
 } from 'naive-ui'
-import { useMenu } from '@/composables/useMenu'
 import { useTheme } from '@/composables/useTheme'
+import SideNav from '@/components/SideNav.vue'
 import SiteQrcode from '@/components/SiteQrcode.vue'
 import { WATERMARK_KEY } from '@/utils/constants'
 
 const route = useRoute()
-const router = useRouter()
-const { menuOptions } = useMenu()
 const { isDark, toggleTheme } = useTheme()
 // §3 水印开关持久化
 const watermarkOn = useStorage(WATERMARK_KEY, true)
@@ -38,15 +35,6 @@ watch([() => route.path, isMobile], ([, mobile]) => {
   if (!mobile) drawerVisible.value = false
 })
 
-// 生产在 GitHub Pages 子路径 / 任意服务器下，logo 用 BASE_URL 拼相对路径，dev / build 都正确
-const logoSrc = `${import.meta.env.BASE_URL}favicon.svg`
-const activeKey = computed(() => route.path)
-
-function handleMenuSelect(key) {
-  if (key !== route.path) router.push(key)
-  drawerVisible.value = false
-}
-
 // 头部菜单按钮：移动端开抽屉，PC 切换侧栏折叠（与移动端按钮同位置同样式）
 function toggleMenu() {
   if (isMobile.value) drawerVisible.value = true
@@ -56,7 +44,17 @@ function toggleMenu() {
 
 <template>
   <!-- §3 全屏水印 + 顶栏开关 -->
-  <n-watermark v-if="watermarkOn" content="牛顿环测量工具" fullscreen cross :font-size="16" :z-index="1500" />
+  <n-watermark
+    v-if="watermarkOn"
+    :font-size="14"
+    :global-rotate="-15"
+    :height="300"
+    :width="400"
+    :z-index="1500"
+    content="牛顿环测量工具"
+    cross
+    fullscreen
+  />
   <!-- h-screen(100vh) 直接锚定视口，不依赖 #app→provider 的百分比高度链，保证铺满 -->
   <n-layout :has-sider="!isMobile" class="h-screen">
     <!-- PC / 平板：可折叠侧栏（naive-ui 内置宽度过渡动画） -->
@@ -70,18 +68,7 @@ function toggleMenu() {
       collapse-mode="width"
       class="relative bg-layout"
     >
-      <div class="flex h-14 items-center gap-2 px-4" :class="collapsed && 'justify-center px-0'">
-        <img :src="logoSrc" alt="logo" class="h-7 w-7 shrink-0" />
-        <span v-show="!collapsed" class="font-semibold text-primary">牛顿环测量工具</span>
-      </div>
-      <n-menu
-        :value="activeKey"
-        :options="menuOptions"
-        :collapsed="collapsed"
-        :collapsed-width="64"
-        :collapsed-icon-size="22"
-        @update:value="handleMenuSelect"
-      />
+      <side-nav :collapsed="collapsed" />
       <!-- 侧栏底部二维码：折叠时隐藏（移动端在抽屉外，不渲染） -->
       <div
         v-show="!collapsed"
@@ -94,11 +81,7 @@ function toggleMenu() {
     <!-- 移动端：左滑抽屉导航（内置滑动动画） -->
     <n-drawer v-model:show="drawerVisible" placement="left" :width="264">
       <div class="flex h-full flex-col bg-layout">
-        <div class="flex h-14 items-center gap-2 px-4">
-          <img :src="logoSrc" alt="logo" class="h-7 w-7" />
-          <span class="font-semibold text-primary">牛顿环测量工具</span>
-        </div>
-        <n-menu :value="activeKey" :options="menuOptions" @update:value="handleMenuSelect" />
+        <side-nav @select="drawerVisible = false" />
       </div>
     </n-drawer>
 

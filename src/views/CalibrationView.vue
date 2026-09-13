@@ -15,7 +15,6 @@ import {
   NEmpty,
   useMessage,
 } from 'naive-ui'
-import { loadOpenCv } from '@/utils/loadOpenCv'
 import { solveGlobalTranslation, verifyOverlayOffset } from '@/utils/imageRegistrator'
 import { useMeasureStore } from '@/composables/useMeasureStore'
 import { CALIB_IMAGES_KEY, CALIB_POINTS_KEY } from '@/utils/constants'
@@ -24,8 +23,6 @@ import { CALIB_IMAGES_KEY, CALIB_POINTS_KEY } from '@/utils/constants'
 const message = useMessage()
 const router = useRouter()
 const { setPixelScale } = useMeasureStore()
-
-const cvReady = ref(false)
 
 // ===== 图片与刻度 =====
 const calibImageA = ref(null) // { src, name, width, height }
@@ -423,7 +420,6 @@ function describeShiftDirection(dx, dy) {
 
 async function runOverlayAutoAlign() {
   if (!overlayReady.value || overlayFineBusy.value || overlayLocked.value) return
-  if (!cvReady.value) return message.warning('OpenCV 尚未加载完成，请稍候再试')
   stopOverlayBlink()
   overlayFineBusy.value = true
   overlayFineMsg.value = '🤖 正在自动全局对齐（整图相关求解平移）…'
@@ -452,7 +448,6 @@ async function runOverlayAutoAlign() {
 
 async function runOverlayCheck() {
   if (!overlayReady.value || overlayCheckBusy.value || overlayFineBusy.value) return
-  if (!cvReady.value) return message.warning('OpenCV 尚未加载完成，请稍候再试')
   stopOverlayBlink()
   overlayCheckBusy.value = true
   overlayFineMsg.value = '🔍 正在检查对齐（拟合两图环系圆心）…'
@@ -729,18 +724,12 @@ function loadSession() {
 }
 watch([calibScaleA, calibScaleB, calibDistanceManual, calibPointPairs], saveSession, { deep: true })
 
-onMounted(async () => {
+onMounted(() => {
   document.addEventListener('keydown', onCalibKeydown)
   loadSession()
   nextTick(() => {
     if (overlayReady.value) drawOverlayCanvas()
   })
-  try {
-    await loadOpenCv()
-    cvReady.value = true
-  } catch {
-    message.error('OpenCV 加载失败，自动对齐/检查对齐不可用')
-  }
 })
 onUnmounted(() => {
   stopOverlayBlink()
@@ -759,9 +748,6 @@ onUnmounted(() => {
         <li>点「确定对齐」锁定，然后在叠加画面上点击取点（可多组）。</li>
         <li>输入鼓轮刻度或实际移动距离，得到标定值（mm/像素），点「应用到识别」。</li>
       </ol>
-      <n-tag class="mt-2" :type="cvReady ? 'success' : 'warning'" :bordered="false" round size="small">
-        {{ cvReady ? 'OpenCV 就绪（自动对齐可用）' : 'OpenCV 加载中…（可先手动对齐）' }}
-      </n-tag>
     </n-card>
 
     <!-- 上传 + 刻度 -->
@@ -913,13 +899,13 @@ onUnmounted(() => {
           <n-button size="small" :disabled="overlayLocked" @click="shiftOverlayBy(0, -1)">↑ 上移</n-button>
           <n-button size="small" :disabled="overlayLocked" @click="shiftOverlayBy(0, 1)">下移 ↓</n-button>
           <n-button size="small" :disabled="overlayLocked" @click="resetOverlayShift">复位</n-button>
-          <n-button size="small" :disabled="overlayLocked || !cvReady" @click="toggleOverlayBlink">
+          <n-button size="small" :disabled="overlayLocked" @click="toggleOverlayBlink">
             {{ overlayBlinkOn ? '停止闪烁' : '闪烁对比' }}
           </n-button>
-          <n-button size="small" type="info" :loading="overlayFineBusy" :disabled="overlayLocked || !cvReady" @click="runOverlayAutoAlign">
+          <n-button size="small" type="info" :loading="overlayFineBusy" :disabled="overlayLocked" @click="runOverlayAutoAlign">
             自动全局对齐
           </n-button>
-          <n-button size="small" :loading="overlayCheckBusy" :disabled="!cvReady" @click="runOverlayCheck">
+          <n-button size="small" :loading="overlayCheckBusy" @click="runOverlayCheck">
             检查对齐
           </n-button>
           <n-button size="small" :type="overlayLocked ? 'warning' : 'primary'" @click="toggleOverlayLock">

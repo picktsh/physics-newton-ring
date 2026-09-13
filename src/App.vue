@@ -8,7 +8,7 @@ const { naiveTheme, themeOverrides } = useTheme()
 </script>
 
 <template>
-  <n-config-provider :theme="naiveTheme" :theme-overrides="themeOverrides">
+  <n-config-provider :theme="naiveTheme" :theme-overrides="themeOverrides" inline-theme-disabled>
     <n-message-provider>
       <basic-layout />
     </n-message-provider>
