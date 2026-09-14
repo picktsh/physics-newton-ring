@@ -20,12 +20,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-      - name: Install pnpm
-        uses: pnpm/action-setup@v6
       - name: Setup Node
         uses: actions/setup-node@v5
         with:
           node-version: 22
+      - name: Enable pnpm (corepack)
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+        run: |
+          corepack enable
+          corepack prepare --activate
       - name: Install dependencies
         run: pnpm install
       - name: Build
