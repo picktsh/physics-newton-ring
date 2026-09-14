@@ -1,0 +1,10 @@
+# === managed by ai-protocol-sync (tells AI what to skip) ===
+# AI 扫描 / 索引时应忽略的噪音目录（构建产物、依赖、临时脚本、IDE 配置）
+node_modules/
+dist/
+.vite/
+.tmp/
+.idea/
+.vscode/
+coverage/
+# === end ai-protocol-sync ===

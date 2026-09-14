@@ -7,5 +7,18 @@ dist-ssr
 .DS_Store
 .idea
 .vscode
-.qoder
 coverage
+
+# === AI generated files (managed by ai-protocol-sync) ===
+# ⚠️ 顺序敏感：`!` 反向 include 必须出现在对应正向忽略之后；
+#    `.qoder/*` + `!.qoder/rules/` 组合是因为 Git 不允许在完全忽略的父目录下 include。
+AGENTS.md
+.aiassistant/
+.trae/rules/project_rules.md
+.qoder/rules/ai-protocol.md
+.qoder/*
+!.qoder/rules/
+AGENTS.personal.md
+!AGENTS.local.md
+.tmp/
+# === end AI generated ===

