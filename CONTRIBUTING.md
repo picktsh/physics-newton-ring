@@ -45,13 +45,39 @@ pnpm sync:ai     # 拉母本覆盖 4 处目标；无变化则静默跳过
 
 ## 页面与数据流
 
-- `/`：首页（路由表卡片网格）。
-- `/recognition`：上传（压缩）→ 两步识别 → 环列表编辑 / Zoom 补环 → 计算链实时预览 → 写 session + 入历史。
+路由表是菜单 / 首页入口 / 内容页标题的单一来源（`src/router/index.js` 的 `meta`）。当前 7 个页面：
+
+- `/`：首页（循环渲染路由表的功能入口卡片）。
+- `/formula`：公式原理（KaTeX 静态速查：等厚干涉、逐差法、不确定度评定步骤）。
+- `/recognition`：上传（存入前压缩）→ OpenCV 两步识别（圆心检测 → 径向剖面识暗环）→ 环列表编辑 / Zoom 补环 → 计算链实时预览 → 写 session + 入历史。引擎由业务按需触发（见「关键约定」）。
 - `/calibration`：双图对齐 / 圆形截取 / 取点 → 标定值写入测量 store（持久化）。
-- `/history`：历史记录（2×2 方格）。
+- `/history`：历史记录（2×2 方格，查看 / 恢复 / 删除 / 清空）。
 - `/data`：导入结果 JSON 回显（与导出互逆）。
 - `/export`：构建结果载荷 → 图片 / JSON / CSV / 表格 / 网页。
-- session 快照结构约定以 `useMeasureStore.js` 头部注释为唯一来源。
+
+数据结构以源码为唯一来源，不在此复制字段：历史单条结构见 `useHistoryStore.js` 头部注释，session 快照见 `useMeasureStore.js` 头部注释；存储 key 全部收敛在 `utils/constants.js`（统一前缀，新仓无旧数据迁移负担）。
+
+## 关键约定与踩坑
+
+> 这些是「为什么这么配」的沉淀，改动前务必先读、避免重踩；具体实现以源码为准。
+
+### UnoCSS：禁用 attributify
+只启用 `presetUno` + `presetIcons`，**禁止 `presetAttributify`**：本项目没有 attributify 写法，而该 preset 会把模板里任意「属性名 + 属性值」当作 utility 候选，导致组件 prop（如图标 prop）被误解析成不存在的图标 utility，产生 Iconify 加载告警并显著扩大 dev 扫描量、拖慢 CSS 生成。图标类名必须以**字符串字面量**写在源码里（UnoCSS 静态提取、不认运行时拼接）；菜单 / 首页卡片图标统一写在 `router/index.js` 的 `meta.icon`，由 `uno.config.js` 把 `src/**/*.js` 纳入扫描。改 `uno.config.js` 或图标用法后需**重启 dev + 硬刷新**验证，防缓存 / HMR 残留误判（旧仓「首页图标不渲染」即为此类，实际配置正常）。
+
+### naive-ui：样式注入顺序
+`index.html` 的 head 末尾保留 naive-ui / vueuc 两个样式锚点 meta（顺序不可颠倒、须是 head 最后几个元素）。naive-ui / vueuc 运行时注入的样式会被插到各自锚点 meta **之前**，我们的 UnoCSS / global 样式恒定排在**之后** → 同特异性时以原子类为准，无需 `!important`。机制依据：naive-ui 官网「潜在的样式冲突」与其 css-render 挂载实现。
+
+### naive-ui：配色走主题而非原子类
+组件配色优先用 `themeOverrides`（含 `peers.*` 组件级覆盖），例如侧栏底色、页头底色 / 分割线均由 naive-ui 主题键给出，不用原子类去压组件背景。原子类覆盖仅在 naive-ui 无对应主题键时使用。
+
+### 布局：sticky footer
+页头全宽固定、其下 `n-layout :has-sider` 左右分栏，页脚在内容区滚动容器内做 sticky footer（不足一屏贴底、内容长则随滚）。要点：min-height + flex 纵向布局需经 `n-layout-content` 的 `content-style` 下推到内部滚动内容；页脚撑开用 `flex-grow`（非 `flex-1`）；半透明只作用于页脚内文字容器而非 footer 本身，否则与侧栏底色混色对不齐。实现见 `layouts/`。
+
+### 部署：相对 base 只在 hash 路由下安全
+构建用相对 base + hash 路由（`createWebHashHistory` 不传 base、运行时按 location 推导），产物可原样放任意服务器 / GitHub Pages 子路径。**强约束**：一旦改用 HTML5 history（`createWebHistory`），嵌套路由会让相对资源解析错乱——务必保持 hash。
+
+### OpenCV 加载：业务按需触发
+引擎 `public/opencv.js`（~10MB）原样下发、不进打包。历经四次演进（全局预热 → 异步组件并行 → public 脚本 + 路由层预热 → **public 脚本 + 业务按需触发**）：路由层预热会在进页时让主线程解析巨型 UMD 而冻结数秒，且占位态识别页根本不用 cv，故改为真正用到 cv 的业务动作触发、配按钮 loading 态。遗留成本：wasm 实例化瞬间仍有短暂主线程冻结，若需零冻结再评估 Web Worker。Mat 释放与特性检测约定见 `AGENTS.local.md`。
 
 ## 提交前自查
 
