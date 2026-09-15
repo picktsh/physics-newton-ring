@@ -41,7 +41,7 @@ import RingCanvasViewer from '@/components/RingCanvasViewer.vue'
 // §8 识别页：上传 → 自动圆心 → 人工核对 → 识别暗环 → 环编辑/补环 → 表1表2/不确定度
 const message = useMessage()
 const router = useRouter()
-const { pixelScale, pixelScaleNumber, setSession, saveImageSession, loadImageSession } =
+const { pixelScale, pixelScaleNumber, setSession, saveImageSession, loadImageSession, calibImages } =
   useMeasureStore()
 const { add: addHistory } = useHistoryStore()
 
@@ -245,6 +245,32 @@ function onFilePick(e) {
   const files = Array.from(e.target.files || [])
   if (files.length) loadFiles(files)
   e.target.value = ''
+}
+
+// ===== 从「像素标定」导入图A/B =====
+// 标定图已是 dataURL，不走 loadFiles(File)；直接写入工作图后复用 processImage 自动检测圆心。
+const calibAReady = computed(() => !!calibImages.value?.A?.src)
+const calibBReady = computed(() => !!calibImages.value?.B?.src)
+async function loadCalibImage(slot) {
+  const img = calibImages.value?.[slot]
+  if (!img?.src) {
+    message.warning(`请先在「像素标定」页上传图${slot}`)
+    return
+  }
+  if (isProcessing.value) {
+    showStatus('⏳ 正在处理中，请稍候…', 'info')
+    return
+  }
+  const loaded = await dataURLToImage(img.src)
+  fileName.value = img.name || `图${slot}`
+  imgState.src = img.src
+  imgWidth.value = loaded.naturalWidth || img.width
+  imgHeight.value = loaded.naturalHeight || img.height
+  showStatus(
+    `📷 已从像素标定导入图${slot}：${fileName.value} (${imgWidth.value}×${imgHeight.value})`,
+    'success',
+  )
+  await processImage()
 }
 
 // ===== 第一步：自动检测圆心 =====
@@ -589,6 +615,8 @@ watch(detectedCenter, () => {
           class="hidden"
           @change="onFilePick"
         />
+        <n-button :disabled="!calibAReady" @click="loadCalibImage('A')">导入图A</n-button>
+        <n-button :disabled="!calibBReady" @click="loadCalibImage('B')">导入图B</n-button>
         <n-button type="primary" @click="fileInputRef?.click()">
           <template #icon><i class="i-carbon:upload" /></template>
           上传牛顿环图像

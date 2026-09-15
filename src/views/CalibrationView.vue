@@ -22,7 +22,7 @@ import { CALIB_IMAGES_KEY, CALIB_POINTS_KEY } from '@/utils/constants'
 // §8 标定页（对应旧 Tab1）：双图上传 → 圆形截取 → 叠加对齐 → 锁定取点 → 标定值 → 应用到识别
 const message = useMessage()
 const router = useRouter()
-const { setPixelScale } = useMeasureStore()
+const { setPixelScale, setCalibImages } = useMeasureStore()
 
 // ===== 图片与刻度 =====
 const calibImageA = ref(null) // { src, name, width, height }
@@ -82,7 +82,7 @@ const overlayMaxY = computed(() =>
 )
 
 // ===== 闪烁对比 =====
-const BLINK_INTERVAL = 600
+const BLINK_INTERVAL = 100
 const overlayBlinkOn = ref(false)
 const overlayBlinkPhase = ref(0)
 let blinkTimer = null
@@ -347,6 +347,8 @@ watch([calibImageA, calibImageB], () => {
   checkCenters.value = null
   overlayLocked.value = false
   saveSession()
+  // 同步到内存单例，供识别页「导入图A/B」跨页读取（不受 sessionStorage 大图配额影响）
+  setCalibImages(calibImageA.value, calibImageB.value)
 })
 
 // ===== 上传 =====

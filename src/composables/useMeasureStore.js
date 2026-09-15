@@ -14,6 +14,11 @@ export const pixelScale = useStorage(PIXEL_SCALE_KEY, '')
 // 会话快照（不落盘：图片 dataURL 体积大，仅在内存中跨页传递；需要留存请用历史页 / 导出 JSON）
 export const session = ref(null)
 
+// 标定页上传的两张原图（不落盘：dataURL 体积大，超 sessionStorage 配额会被丢弃，
+// 故仅在内存单例中跨页传递。识别页「导入图A/B」直接读此，避免 sessionStorage 大图置空的静默失败）。
+// 结构: { A: { src, name, width, height } | null, B: 同 }
+export const calibImages = ref({ A: null, B: null })
+
 // 识别页图像会话（sessionStorage，不压缩，刷新不丢、关 tab 自动清理）
 // 结构: { src, fileName, width, height, center, rings, phase, filterParams, grayscale, outerRadius }
 export const imageSession = useStorage(IMAGE_SESSION_KEY, null, sessionStorage)
@@ -45,6 +50,10 @@ export function useMeasureStore() {
     session.value = null
   }
 
+  function setCalibImages(a, b) {
+    calibImages.value = { A: a || null, B: b || null }
+  }
+
   function saveImageSession(payload) {
     try {
       imageSession.value = payload ? { ...payload, updatedAt: Date.now() } : null
@@ -65,11 +74,13 @@ export function useMeasureStore() {
   return {
     pixelScale,
     session,
+    calibImages,
     imageSession,
     setPixelScale,
     pixelScaleNumber,
     setSession,
     clearSession,
+    setCalibImages,
     saveImageSession,
     loadImageSession,
     clearImageSession,
