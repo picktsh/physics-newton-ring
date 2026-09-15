@@ -75,6 +75,17 @@ export const routes = [
       description: '将当前测量结果导出为图片 / JSON / 表格 / 网页 / CSV',
     },
   },
+  {
+    path: '/docs',
+    name: 'docs',
+    component: () => import('@/views/DocsView.vue'),
+    // 文档中心：内置 3 篇用户向手册 + 本地 md/zip 拖入预览 + 4 种导出（md/doc/png/print）
+    meta: {
+      title: '文档中心',
+      icon: 'i-carbon:documentation',
+      description: '内置手册与通用 Markdown 查看器 · 支持拖入 md/zip、导出 md/doc/png/打印 PDF',
+    },
+  },
 ]
 
 const router = createRouter({

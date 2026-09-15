@@ -21,3 +21,19 @@ export const HISTORY_MAX = 20
 // 存入前压缩：最长边像素 + JPEG 质量
 export const IMAGE_MAX_EDGE = 1600
 export const IMAGE_QUALITY = 0.85
+
+// 文档中心（§Docs）
+// - 本地拖入 tab 的会话快照 key：sessionStorage，刷新保留、× 手动关闭清除
+export const DOCS_TABS_KEY = `${STORAGE_PREFIX}docs-tabs`
+// - 单个本地 md tab 允许进 sessionStorage 的字节上限；超过则 tab 转 transient（能预览但不落盘）
+export const DOCS_TAB_PERSIST_MAX_BYTES = 1 * 1024 * 1024
+// - 所有本地 tab 累计字节上限（sessionStorage 浏览器配额一般 5 MB，留余量）
+export const DOCS_TABS_TOTAL_MAX_BYTES = 3 * 1024 * 1024
+// - zip 压缩包体积上限，超过 unzip 前二次确认（避免长时间冻结主线程）
+export const DOCS_ZIP_MAX_BYTES = 50 * 1024 * 1024
+// - 内置 3 篇文档的元数据：文件名（含中文）→ 展示标题；fetch 时 encodeURI
+export const DOCS_BUILTIN = [
+  { file: '操作流程与建议.md', title: '操作流程与建议' },
+  { file: '牛顿环实验结合OpenCV方案及需求.md', title: 'OpenCV 方案与需求' },
+  { file: '重构项目需求说明.md', title: '重构需求说明' },
+]

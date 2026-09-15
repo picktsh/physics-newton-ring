@@ -14,11 +14,57 @@
 5. 步骤条组件 → 已改自定义两步流程 UI（待定是否补回）。
 6. LoadingScreen 接线待定（当前用按钮 loading 态代替遮罩）。
 7. 若要消除 OpenCV wasm 实例化瞬间的主线程冻结 → 评估迁移 Web Worker。
+8. 识别页牛顿环图拖入缺「松手提示」遮罩（与文档中心 Drop 交互对齐）。
+9. 存储层容量：识别页大量图片 base64 可能顶爆 localStorage（~5 MB）→ 后续评估迁移 IndexedDB（可考虑 `@vueuse/core` 的 `useIDBKeyval`），跨页状态一并评估是否上 Pinia。
 
 ### 口径待定稿
 
 - 识别算法细节阈值（环级数范围、半径精度、圆心允许偏差）。
 - 导出表格 / 网页视图的列与样式。
+
+## 2026-09-15 · 文档中心（内置手册 + 通用 MD 查看器）
+
+### Added
+
+- **`/docs` 文档中心**：内置 3 篇用户向手册（`public/docs/`，中文名保留） + 本地 md/zip 拖入预览，菜单/首页卡片自动纳入。
+- **通用 MD 查看器**：拖入或点选 `.md/.markdown/.txt` → 新建 tab；`.zip` 自动展开（fflate）并提取同包内相对路径图片转 objectURL 映射到 md；`.pdf` / 图片类 → `window.open` 新窗口原生预览，不占 tab。
+- **去重定位**：新加入内容若与已有 tab 完全一致 → 激活既有，不重复建；同名不同内容 → `basename (n).ext` 后缀区分。
+- **会话暂存**：本地 tab 序列化到 `sessionStorage`（前缀 `physics-newton-ring:docs-tabs`），刷新保留、手动 `×` 清除；单 tab > 1 MB 或总量 > 3 MB → 自动转 `transient`，文档顶部温和提示「刷新会丢失」但不阻断预览；zip tab 一律 transient（objectURL 生命周期只在内存）。
+- **导出 4 件套**：`.md` 原文（零依赖） / `.doc`（Word 兼容的 application/msword + BOM，免引 html-to-docx） / `.png`（html2canvas 懒加载） / **打印另存 PDF**（`window.print()` + `@media print` visibility 隔离，中文/公式完美）。
+- **TOC + 锚点**：markdown-it-anchor 中文友好 slugify，右侧 sticky TOC（≥ 2 项时显示，lg 断点以上），点击 `scrollIntoView` 平滑跳转。
+- **图片错误降级提示**：拖入的 md 有相对图片失败时 → 一次性 `NAlert closable` 引导改用 zip 打包（同一 tab 关闭后不再弹）。
+
+### Changed
+
+- `src/utils/constants.js` 新增 `DOCS_TABS_KEY` / `DOCS_TAB_PERSIST_MAX_BYTES` / `DOCS_TABS_TOTAL_MAX_BYTES` / `DOCS_ZIP_MAX_BYTES` / `DOCS_BUILTIN`；`DOCS_BUILTIN` 是内置文档元数据的单一来源（文件名 ↔ 展示标题），router 与 fetch 都从这里读。
+- `src/styles/global.css` 追加 `.markdown-body` 排版样式 + `@media print` 打印隔离规则。
+
+### 新增依赖
+
+| 包 | 用途 | 备注 |
+|---|---|---|
+| `markdown-it` + `markdown-it-anchor` + `@vscode/markdown-it-katex` | MD 渲染栈，公式复用已装 katex | 常规包 |
+| `html2canvas` | DOM → PNG | 动态 `import()` 懒加载 |
+| `fflate` | ZIP 解压 | 动态 `import()`，~7 KB gzip |
+
+> 初稿曾计划 `html-to-docx`（~50 KB + Node polyfill 风险），实现时改用 Word 直接打开的 `application/msword` MIME HTML，零依赖且对齐原始需求里的「doc」叫法。
+
+### 关键取舍
+
+- **md 源加载 = 运行时 fetch**（`public/docs/*.md` + `${BASE_URL}docs/${encodeURIComponent(name)}`）：改文档不需重新 build，代价是必须用 BASE_URL 拼相对路径（项目已有 favicon/logo 同款先例）。
+- **PDF 导出 = 浏览器打印**：`jspdf + html2canvas` 方案中文会变图、体积大、分页难看，效果不如浏览器原生「另存为 PDF」，不引。
+- **文件名保留中文**：内置 3 篇用中文文件名 + `encodeURI` fetch；本地拖入用 File 对象原生 `name`；下载全走 `<a download>`（HTML5 原生支持 UTF-8 文件名），避免 slug 映射层维护成本。
+- **不引** `md-editor-v3`（内置编辑器 UI 冗余）、`marked`（插件生态薄）、`highlight.js`（当前文档以中文叙述为主，视觉收益低）、`file-saver`（`<a download>` 足够）、`DOMPurify`（威胁模型是自伤）。
+
+### Fixed（首轮验收后的 5 项修正）
+
+- **打印/PDF 偏移与截断**：旧 `@media print` 用 `position:absolute` + visibility 把 `[data-doc-body]` 拉回左上角，但逃不出 `BasicLayout` 的 `overflow:hidden` + naive-ui `n-scrollbar` 祖先 → 偏移、内容看不全。改为把当前文档**克隆到 `<body>` 末尾的 `.print-doc-host`**（同文档，KaTeX 字体/相对图片/blob 图/mermaid SVG 全复用），打印时隐藏除它以外的所有 body 子节点，内容从页首正常流动、自然跨页。
+- **流程图显示为字符**：文档含 ```` ```mermaid ```` 的 `graph TD`，markdown-it 不识别。新增 `mermaid` 依赖（懒加载、独立 chunk、仅含流程图时按需拉），`markdownRenderer` 加 mermaid fence 规则输出 `<div class="mermaid">`，`mermaidRunner` 在 DOM 挂载后按深浅主题 `mermaid.run` 转 SVG。
+- **导出按钮太散**：右上角 4 个平铺按钮收拢为 `NButton`「导出」+ `NDropdown`（click 触发，二级选 md/doc/png/print）。
+- **PNG 缺水印**：屏幕水印是 `<n-watermark fullscreen>` 固定覆盖层、非 doc-body 子节点，html2canvas 截不到。新增 `watermark.js` 单一来源生成平铺旋转文字水印，png（canvas `createPattern` 叠加）/ doc / 打印三处复用；**导出水印始终附加**（与可关闭的屏幕水印解耦，「关水印需二次密码」为后续构思未实现）。附带 png 导出统一浅底避免深色主题下全黑。
+- **按钮/标签样式**：手搓的 tab 栏改用 `NTabs(type="card" addable)` + `NTabPane`（`addable` 的 + 触发本地导入、本地 tab `closable`、`@remove` 关闭），工具条统一 naive-ui 组件。
+
+> 说明：`.md` 原文导出保持源码不变（纯文本塞水印会污染内容）；`.doc` 水印为 Word HTML 背景层 best-effort，不同 Word 版本对固定背景支持不一。
 
 ## 2026-09-14 · 公式速查页 + 导航组件化
 
