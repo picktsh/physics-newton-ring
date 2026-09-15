@@ -24,19 +24,8 @@ import {
   extractRingDataForManual,
   mergeAndNumberRings,
 } from '@/utils/imageProcessor'
-import {
-  clearCanvas,
-  drawDetectionResults,
-  drawCenterOverlay,
-  drawOverlay,
-} from '@/utils/canvasDrawer'
-import {
-  initCanvasInteraction,
-  onTableRowHover,
-  onTableRowLeave,
-  initCenterAdjustInteraction,
-  initDragDrop,
-} from '@/utils/interactionHandler'
+import { drawOverlay } from '@/utils/canvasDrawer'
+import { initDragDrop } from '@/utils/interactionHandler'
 import {
   calculateDiameterData,
   calculateRadiusData,
@@ -47,11 +36,13 @@ import {
 import { useMeasureStore } from '@/composables/useMeasureStore'
 import { useHistoryStore } from '@/composables/useHistoryStore'
 import ResultTables from '@/components/ResultTables.vue'
+import RingCanvasViewer from '@/components/RingCanvasViewer.vue'
 
-// §8 识别页（对应旧 Tab2）：上传 → 自动圆心 → 人工核对 → 识别暗环 → 环编辑/补环 → 表1表2/不确定度
+// §8 识别页：上传 → 自动圆心 → 人工核对 → 识别暗环 → 环编辑/补环 → 表1表2/不确定度
 const message = useMessage()
 const router = useRouter()
-const { pixelScale, pixelScaleNumber, setSession } = useMeasureStore()
+const { pixelScale, pixelScaleNumber, setSession, saveImageSession, loadImageSession } =
+  useMeasureStore()
 const { add: addHistory } = useHistoryStore()
 
 // ===== 基础状态 =====
@@ -59,10 +50,7 @@ const isProcessing = ref(false)
 const logs = ref([])
 const logContainerRef = ref(null)
 const fileInputRef = ref(null)
-
-const resultImageRef = ref(null) // <img> DOM，算法在预处理阶段直接写 .src
-const resultCanvasRef = ref(null) // 覆盖层 <canvas>
-const resultImageSrc = ref('') // 绑定到 <img :src>，识别完成后恢复为原图
+const algoImageRef = ref(null) // 隐藏 img，供算法写调试帧 & 提取 processedDataUrl
 
 const fileName = ref('')
 const imgWidth = ref(0)
@@ -94,7 +82,6 @@ const centerCrossArm = ref(24)
 const centerProcessedDataUrl = ref(null)
 const detectedOuterRadius = ref(0)
 const hoveredRing = ref(null)
-let cleanupCenterAdjust = null
 
 // ===== 环列表（可编辑副本）=====
 const ringList = ref([])
@@ -103,7 +90,7 @@ const diffStep = ref(5)
 const enabledRings = computed(() => ringList.value.filter((r) => r.enabled))
 const manualRingCount = computed(() => ringList.value.filter((r) => r.manual).length)
 
-// ===== 预处理预览（仅影响显示预览，不进入识别算法，与旧口径一致）=====
+// ===== 预处理预览（仅影响显示预览，不进入识别算法）=====
 const filterParams = reactive({
   brightness: 1.0,
   contrast: 1.0,
@@ -182,6 +169,34 @@ const resultPayload = computed(() => {
   }
 })
 
+// ===== 全屏放大 =====
+const zoomOpen = ref(false)
+const zoomCrop = ref(null)
+const zoomCanUse = computed(() => centerPhase.value === 'done' && !!imgState.src)
+
+function computeZoomCrop() {
+  const center = detectedCenter.value || imgState.center
+  if (!imgWidth.value || !imgHeight.value || !center) return null
+  let R = detectedOuterRadius.value
+  if (!(R > 0)) R = enabledRings.value.reduce((m, r) => Math.max(m, r.avgRadius), 0) * 1.02
+  if (!(R > 0)) return { x: 0, y: 0, w: imgWidth.value, h: imgHeight.value }
+  const side = Math.max(24, Math.round(2 * R))
+  const w = Math.min(side, imgWidth.value)
+  const h = Math.min(side, imgHeight.value)
+  const x = Math.max(0, Math.min(imgWidth.value - w, Math.round(center.x - w / 2)))
+  const y = Math.max(0, Math.min(imgHeight.value - h, Math.round(center.y - h / 2)))
+  return { x, y, w, h }
+}
+function openZoom() {
+  if (!zoomCanUse.value) return
+  zoomCrop.value = computeZoomCrop()
+  zoomOpen.value = true
+}
+function closeZoom() {
+  zoomOpen.value = false
+  zoomCrop.value = null
+}
+
 // ===== 日志 =====
 function showStatus(msg, type = 'info') {
   logs.value.push({ msg, type, time: new Date().toLocaleTimeString('zh-CN') })
@@ -234,14 +249,10 @@ function onFilePick(e) {
 
 // ===== 第一步：自动检测圆心 =====
 async function processImage() {
-  if (!imgState.src) {
-    return showStatus('❌ 请先上传图像', 'error')
-  }
+  if (!imgState.src) return showStatus('❌ 请先上传图像', 'error')
   if (isProcessing.value) return showStatus('⏳ 正在处理中，请稍候…', 'info')
   isProcessing.value = true
   try {
-    cleanupCenterAdjust?.()
-    cleanupCenterAdjust = null
     centerPhase.value = 'idle'
     detectedCenter.value = null
     centerProcessedDataUrl.value = null
@@ -249,69 +260,30 @@ async function processImage() {
     ringList.value = []
     imgState.rings = null
     closeZoom()
-    resultImageSrc.value = ''
-    clearCanvas(resultCanvasRef.value)
 
-    const centerResult = await detectNewtonRingCenter(imageManager, showStatus, resultImageRef)
+    const centerResult = await detectNewtonRingCenter(imageManager, showStatus, algoImageRef)
     if (!centerResult) {
       showStatus('❌ 无法检测到牛顿环中心，请检查图像质量', 'error')
-      resultImageSrc.value = imgState.src
       return
     }
     detectedCenter.value = { x: Math.round(centerResult.x), y: Math.round(centerResult.y) }
     detectedOuterRadius.value = centerResult.outerRadius
     centerProcessedDataUrl.value = centerResult.processedDataUrl
-    enterAwaitingCenterPhase()
+    centerPhase.value = 'awaiting-center'
     showStatus('🔍 请核对圆心：可拖拽 / 方向键微调 / 输入坐标，确认后再识别环', 'info')
+    persistToSession()
   } catch (error) {
     showStatus(`❌ 处理失败: ${error.message}`, 'error')
-    resultImageSrc.value = imgState.src
   } finally {
     isProcessing.value = false
   }
 }
-
-function enterAwaitingCenterPhase() {
-  centerPhase.value = 'awaiting-center'
-  // 圆心确认阶段：底图恢复原图，覆盖层画圆心十字
-  resultImageSrc.value = imgState.src
-  nextTick(() => {
-    cleanupCenterAdjust?.()
-    cleanupCenterAdjust = initCenterAdjustInteraction(resultImageRef, resultCanvasRef, (c) => {
-      detectedCenter.value = c
-    })
-    drawCenterOverlay(
-      resultCanvasRef,
-      detectedCenter.value,
-      imgWidth.value,
-      imgHeight.value,
-      centerCrossArm.value,
-    )
-  })
-}
-
-watch(
-  [detectedCenter, centerCrossArm],
-  () => {
-    if (centerPhase.value !== 'awaiting-center' || !detectedCenter.value) return
-    drawCenterOverlay(
-      resultCanvasRef,
-      detectedCenter.value,
-      imgWidth.value,
-      imgHeight.value,
-      centerCrossArm.value,
-    )
-  },
-  { deep: true },
-)
 
 // ===== 第二步：确认圆心并识别暗环 =====
 async function confirmCenterAndDetectRings() {
   if (!detectedCenter.value || isProcessing.value) return
   isProcessing.value = true
   try {
-    cleanupCenterAdjust?.()
-    cleanupCenterAdjust = null
     const darkRings = await detectRingsWithCenter(
       imageManager,
       showStatus,
@@ -322,7 +294,7 @@ async function confirmCenterAndDetectRings() {
     )
     if (darkRings.length === 0) {
       showStatus('⚠️ 未检测到暗环，请微调圆心或调整预处理参数后重试', 'error')
-      enterAwaitingCenterPhase()
+      centerPhase.value = 'awaiting-center'
       return
     }
     centerPhase.value = 'done'
@@ -331,14 +303,10 @@ async function confirmCenterAndDetectRings() {
       `✅ 识别到 ${darkRings.length} 个暗环，可在表1去除错环/改编号，或点击图像/全屏放大补环`,
       'success',
     )
-    nextTick(() => {
-      drawDetectionResults(resultCanvasRef, imageManager)
-      initCanvasInteractionWrapper()
-      resultImageSrc.value = imgState.src
-    })
+    persistToSession()
   } catch (error) {
     showStatus(`❌ 环识别失败: ${error.message}`, 'error')
-    enterAwaitingCenterPhase()
+    centerPhase.value = 'awaiting-center'
   } finally {
     isProcessing.value = false
   }
@@ -346,9 +314,22 @@ async function confirmCenterAndDetectRings() {
 
 async function redetectCenter() {
   if (isProcessing.value) return
-  cleanupCenterAdjust?.()
-  cleanupCenterAdjust = null
   await processImage()
+}
+
+// ===== Viewer 事件 =====
+function onViewerClick({ x, y }) {
+  if (centerPhase.value !== 'done') return
+  addManualRingAt(x, y)
+}
+function onViewerCenterUpdate(c) {
+  detectedCenter.value = c
+}
+function handleRowHover(n) {
+  hoveredRing.value = n
+}
+function handleRowLeave() {
+  hoveredRing.value = null
 }
 
 // ===== 环人工核对 =====
@@ -357,7 +338,7 @@ function persistRings() {
   if (rings.length === 0) return
   imgState.rings = rings.map((r) => ({ ...r }))
   imgState.center = detectedCenter.value || imgState.center || null
-  nextTick(() => drawDetectionResults(resultCanvasRef, imageManager))
+  persistToSession()
 }
 function onToggleRingEnabled() {
   if (renumberOnRemove.value) renumberEnabledRings()
@@ -434,33 +415,11 @@ async function addManualRingAt(px, py) {
   showStatus(`✅ 已手动补环 (半径 ${radius.toFixed(2)}px)，编号按半径重排`, 'success')
   return true
 }
-async function completeRingAtClick(event) {
-  if (centerPhase.value !== 'done') return
-  const imgEl = resultImageRef.value
-  const canvas = resultCanvasRef.value
-  if (!imgEl || !canvas) return
-  const rect = imgEl.getBoundingClientRect()
-  const scaleX = canvas.width / rect.width
-  const scaleY = canvas.height / rect.height
-  const px = (event.clientX - rect.left) * scaleX
-  const py = (event.clientY - rect.top) * scaleY
-  await addManualRingAt(px, py)
-}
-function initCanvasInteractionWrapper() {
-  initCanvasInteraction(resultImageRef, resultCanvasRef, imageManager, hoveredRing)
-  const img = resultImageRef.value
-  if (img) img.addEventListener('click', completeRingAtClick)
-}
-function handleRowHover(n) {
-  onTableRowHover(n, resultCanvasRef, imageManager, hoveredRing)
-}
-function handleRowLeave() {
-  onTableRowLeave(resultCanvasRef, imageManager, hoveredRing)
-}
 
 // ===== 圆心键盘微调 =====
 function onCenterKeydown(e) {
   if (centerPhase.value !== 'awaiting-center' || !detectedCenter.value) return
+  if (zoomOpen.value) return
   const ae = document.activeElement
   if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return
   if (['+', '=', '-', '_'].includes(e.key)) {
@@ -477,20 +436,11 @@ function onCenterKeydown(e) {
   let dx = 0
   let dy = 0
   switch (e.key) {
-    case 'ArrowUp':
-      dy = -step
-      break
-    case 'ArrowDown':
-      dy = step
-      break
-    case 'ArrowLeft':
-      dx = -step
-      break
-    case 'ArrowRight':
-      dx = step
-      break
-    default:
-      return
+    case 'ArrowUp': dy = -step; break
+    case 'ArrowDown': dy = step; break
+    case 'ArrowLeft': dx = -step; break
+    case 'ArrowRight': dx = step; break
+    default: return
   }
   e.preventDefault()
   detectedCenter.value = {
@@ -499,305 +449,43 @@ function onCenterKeydown(e) {
   }
 }
 
-// ===== 全屏放大补环 =====
-const ZOOM_MAX_SCALE = 8
-const ZOOM_WHEEL_STEP = 1.25
-const ZOOM_PAN_THRESHOLD = 5
-const ZOOM_KEY_PAN_RATIO = 0.1
-const zoomOpen = ref(false)
-const zoomCrop = ref(null)
-const zoomViewport = ref({ w: 0, h: 0 })
-const zoomScale = ref(1)
-const zoomOffset = ref({ x: 0, y: 0 })
-const zoomCursor = ref(null)
-const zoomHoveredRing = ref(null)
-const zoomPanning = ref(false)
-const zoomStageRef = ref(null)
-const zoomCanvasRef = ref(null)
-let zoomPan = null
-let zoomSuppressClick = false
-
-const zoomCanUse = computed(() => centerPhase.value === 'done' && !!imgState.src)
-const zoomScaleMin = computed(() => {
-  const V = zoomViewport.value
-  const img = { width: imgWidth.value, height: imgHeight.value }
-  if (!V.w || !V.h || !img.width || !img.height) return 0.1
-  return Math.min(V.w / img.width, V.h / img.height)
-})
-const zoomImgStyle = computed(() => {
-  const img = { width: imgWidth.value, height: imgHeight.value }
-  return {
-    width: `${img.width * zoomScale.value}px`,
-    height: `${img.height * zoomScale.value}px`,
-    transform: `translate(${zoomOffset.value.x}px, ${zoomOffset.value.y}px)`,
-    transformOrigin: '0 0',
-  }
-})
-
-function computeZoomCrop() {
-  const center = detectedCenter.value || imgState.center
-  if (!imgWidth.value || !imgHeight.value || !center) return null
-  let R = detectedOuterRadius.value
-  if (!(R > 0)) R = enabledRings.value.reduce((m, r) => Math.max(m, r.avgRadius), 0) * 1.02
-  if (!(R > 0)) return { x: 0, y: 0, w: imgWidth.value, h: imgHeight.value }
-  const side = Math.max(24, Math.round(2 * R))
-  const w = Math.min(side, imgWidth.value)
-  const h = Math.min(side, imgHeight.value)
-  const x = Math.max(0, Math.min(imgWidth.value - w, Math.round(center.x - w / 2)))
-  const y = Math.max(0, Math.min(imgHeight.value - h, Math.round(center.y - h / 2)))
-  return { x, y, w, h }
-}
-function measureZoomViewport() {
-  const stage = zoomStageRef.value
-  zoomViewport.value = stage
-    ? { w: stage.clientWidth || 0, h: stage.clientHeight || 0 }
-    : { w: 0, h: 0 }
-}
-function clampZoomOffset() {
-  const V = zoomViewport.value
-  if (!imgWidth.value || !imgHeight.value || !V.w || !V.h) return
-  const dispW = imgWidth.value * zoomScale.value
-  const dispH = imgHeight.value * zoomScale.value
-  const o = zoomOffset.value
-  zoomOffset.value = {
-    x: dispW >= V.w ? Math.min(0, Math.max(V.w - dispW, o.x)) : (V.w - dispW) / 2,
-    y: dispH >= V.h ? Math.min(0, Math.max(V.h - dispH, o.y)) : (V.h - dispH) / 2,
-  }
-}
-function resetZoomView() {
-  const crop = zoomCrop.value
-  const V = zoomViewport.value
-  if (!crop || !V.w || !V.h) return
-  const s = Math.min(V.w / crop.w, V.h / crop.h)
-  zoomScale.value = Math.max(zoomScaleMin.value, Math.min(ZOOM_MAX_SCALE, s))
-  zoomOffset.value = {
-    x: V.w / 2 - (crop.x + crop.w / 2) * zoomScale.value,
-    y: V.h / 2 - (crop.y + crop.h / 2) * zoomScale.value,
-  }
-  clampZoomOffset()
-  drawZoom()
-}
-function openZoom() {
-  if (!zoomCanUse.value) return
-  const crop = computeZoomCrop()
-  if (!crop) return showStatus('❌ 无法取景：缺少圆心或图像尺寸', 'error')
-  zoomCrop.value = crop
-  zoomCursor.value = null
-  zoomHoveredRing.value = null
-  zoomSuppressClick = false
-  zoomOpen.value = true
-  nextTick(() => {
-    measureZoomViewport()
-    resetZoomView()
+// ===== sessionStorage 持久化 =====
+function persistToSession() {
+  if (!imgState.src) return
+  saveImageSession({
+    src: imgState.src,
+    fileName: fileName.value,
+    width: imgWidth.value,
+    height: imgHeight.value,
+    center: detectedCenter.value,
+    rings: ringList.value.length ? ringList.value.map((r) => ({ ...r })) : null,
+    phase: centerPhase.value,
+    filterParams: { ...filterParams },
+    grayscale: resultGrayscale.value,
+    outerRadius: detectedOuterRadius.value,
   })
-  showStatus(
-    `⛶ 已全屏放大：取景 ${crop.w}×${crop.h}px，滚轮缩放 / 拖拽平移 / 点击补环，ESC 关闭`,
-    'success',
-  )
 }
-function closeZoom() {
-  if (zoomPan) {
-    document.removeEventListener('mousemove', onZoomPanMove)
-    document.removeEventListener('mouseup', onZoomPanEnd)
-    zoomPan = null
+
+function restoreFromSession() {
+  const saved = loadImageSession()
+  if (!saved?.src) return
+  imgState.src = saved.src
+  fileName.value = saved.fileName || ''
+  imgWidth.value = saved.width || 0
+  imgHeight.value = saved.height || 0
+  detectedCenter.value = saved.center || null
+  detectedOuterRadius.value = saved.outerRadius || 0
+  resultGrayscale.value = saved.grayscale || false
+  if (saved.filterParams) Object.assign(filterParams, saved.filterParams)
+  if (saved.rings && saved.rings.length) {
+    ringList.value = saved.rings.map((r) => ({ ...r, enabled: r.enabled !== false }))
+    imgState.rings = saved.rings
+    imgState.center = saved.center
   }
-  zoomPanning.value = false
-  zoomSuppressClick = false
-  zoomOpen.value = false
-  zoomCrop.value = null
-  zoomCursor.value = null
-  zoomHoveredRing.value = null
-  zoomViewport.value = { w: 0, h: 0 }
-}
-function zoomScaleAt(vx, vy, factor) {
-  const old = zoomScale.value
-  const next = Math.max(zoomScaleMin.value, Math.min(ZOOM_MAX_SCALE, old * factor))
-  if (next === old) return
-  const ix = (vx - zoomOffset.value.x) / old
-  const iy = (vy - zoomOffset.value.y) / old
-  zoomScale.value = next
-  zoomOffset.value = { x: vx - ix * next, y: vy - iy * next }
-  clampZoomOffset()
-  drawZoom()
-}
-function onZoomWheel(event) {
-  const stage = zoomStageRef.value
-  if (!stage) return
-  event.preventDefault()
-  const rect = stage.getBoundingClientRect()
-  zoomScaleAt(
-    event.clientX - rect.left,
-    event.clientY - rect.top,
-    event.deltaY < 0 ? ZOOM_WHEEL_STEP : 1 / ZOOM_WHEEL_STEP,
-  )
-}
-function onZoomMouseDown(event) {
-  if (!zoomOpen.value || event.button !== 0) return
-  event.preventDefault()
-  zoomPan = {
-    sx: event.clientX,
-    sy: event.clientY,
-    ox: zoomOffset.value.x,
-    oy: zoomOffset.value.y,
-    moved: false,
-  }
-  zoomPanning.value = true
-  document.addEventListener('mousemove', onZoomPanMove)
-  document.addEventListener('mouseup', onZoomPanEnd)
-}
-function onZoomPanMove(event) {
-  if (!zoomPan) return
-  const dx = event.clientX - zoomPan.sx
-  const dy = event.clientY - zoomPan.sy
-  if (!zoomPan.moved && Math.hypot(dx, dy) > ZOOM_PAN_THRESHOLD) zoomPan.moved = true
-  if (!zoomPan.moved) return
-  zoomOffset.value = { x: zoomPan.ox + dx, y: zoomPan.oy + dy }
-  clampZoomOffset()
-  drawZoom()
-}
-function onZoomPanEnd() {
-  document.removeEventListener('mousemove', onZoomPanMove)
-  document.removeEventListener('mouseup', onZoomPanEnd)
-  const pan = zoomPan
-  zoomPan = null
-  zoomPanning.value = false
-  if (pan?.moved) zoomSuppressClick = true
-}
-function zoomEventToImageCoords(event) {
-  const stage = zoomStageRef.value
-  if (!stage) return null
-  const rect = stage.getBoundingClientRect()
-  if (!rect.width || !rect.height) return null
-  const x = (event.clientX - rect.left - zoomOffset.value.x) / zoomScale.value
-  const y = (event.clientY - rect.top - zoomOffset.value.y) / zoomScale.value
-  return { x, y, inside: x >= 0 && y >= 0 && x < imgWidth.value && y < imgHeight.value }
-}
-function onZoomMouseMove(event) {
-  const p = zoomEventToImageCoords(event)
-  if (!p) return
-  const center = detectedCenter.value || imgState.center
-  zoomCursor.value = {
-    x: p.x,
-    y: p.y,
-    inside: p.inside,
-    r: center ? Math.hypot(p.x - center.x, p.y - center.y) : 0,
-  }
-  let hit = null
-  for (const ring of enabledRings.value) {
-    const dist = Math.hypot(p.x - ring.x, p.y - ring.y)
-    if (Math.abs(dist - ring.avgRadius) < Math.max(8, ring.avgRadius * 0.05)) {
-      hit = ring.number
-      break
-    }
-  }
-  zoomHoveredRing.value = hit
-  drawZoom()
-}
-function onZoomMouseLeave() {
-  zoomCursor.value = null
-  zoomHoveredRing.value = null
-  drawZoom()
-}
-async function onZoomClick(event) {
-  if (zoomSuppressClick) {
-    zoomSuppressClick = false
-    return
-  }
-  const p = zoomEventToImageCoords(event)
-  if (!p) return
-  if (!p.inside) return showStatus('⚠️ 请点击图像范围内', 'info')
-  const ok = await addManualRingAt(p.x, p.y)
-  if (ok) drawZoom()
-}
-function onZoomKeydown(e) {
-  if (!zoomOpen.value) return
-  const ae = document.activeElement
-  if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) return
-  if (e.key === 'Escape') {
-    e.preventDefault()
-    closeZoom()
-    return
-  }
-  const V = zoomViewport.value
-  if (e.key === '+' || e.key === '=') {
-    e.preventDefault()
-    zoomScaleAt(V.w / 2, V.h / 2, ZOOM_WHEEL_STEP)
-    return
-  }
-  if (e.key === '-' || e.key === '_') {
-    e.preventDefault()
-    zoomScaleAt(V.w / 2, V.h / 2, 1 / ZOOM_WHEEL_STEP)
-    return
-  }
-  const step = ZOOM_KEY_PAN_RATIO * (e.shiftKey ? 3 : 1)
-  let dx = 0
-  let dy = 0
-  switch (e.key) {
-    case 'ArrowUp':
-      dy = V.h * step
-      break
-    case 'ArrowDown':
-      dy = -V.h * step
-      break
-    case 'ArrowLeft':
-      dx = V.w * step
-      break
-    case 'ArrowRight':
-      dx = -V.w * step
-      break
-    default:
-      return
-  }
-  e.preventDefault()
-  zoomOffset.value = { x: zoomOffset.value.x + dx, y: zoomOffset.value.y + dy }
-  clampZoomOffset()
-  drawZoom()
-}
-function onZoomResize() {
-  if (!zoomOpen.value) return
-  measureZoomViewport()
-  clampZoomOffset()
-  drawZoom()
-}
-function drawZoom() {
-  const canvas = zoomCanvasRef.value
-  const V = zoomViewport.value
-  if (!canvas || !V.w || !V.h) return
-  const dpr = window.devicePixelRatio || 1
-  const cw = Math.round(V.w * dpr)
-  const ch = Math.round(V.h * dpr)
-  if (canvas.width !== cw) canvas.width = cw
-  if (canvas.height !== ch) canvas.height = ch
-  const ctx = canvas.getContext('2d')
-  ctx.setTransform(1, 0, 0, 1, 0, 0)
-  ctx.clearRect(0, 0, cw, ch)
-  const scale = zoomScale.value
-  const off = zoomOffset.value
-  ctx.setTransform(scale * dpr, 0, 0, scale * dpr, off.x * dpr, off.y * dpr)
-  const unit = 1 / scale
-  drawOverlay(ctx, enabledRings.value, zoomHoveredRing.value, unit)
-  const center = detectedCenter.value || imgState.center
-  if (!center) return
-  const arm = 14 * unit
-  ctx.lineWidth = 2 * unit
-  ctx.strokeStyle = 'rgba(255, 165, 0, 1)'
-  ctx.beginPath()
-  ctx.moveTo(center.x - arm, center.y)
-  ctx.lineTo(center.x + arm, center.y)
-  ctx.moveTo(center.x, center.y - arm)
-  ctx.lineTo(center.x, center.y + arm)
-  ctx.stroke()
-  const cur = zoomCursor.value
-  if (!cur || !cur.inside) return
-  ctx.lineWidth = 1.5 * unit
-  ctx.strokeStyle = 'rgba(0, 255, 255, 0.9)'
-  ctx.beginPath()
-  ctx.arc(center.x, center.y, cur.r, 0, Math.PI * 2)
-  ctx.stroke()
-  ctx.beginPath()
-  ctx.moveTo(center.x, center.y)
-  ctx.lineTo(center.x + (cur.x - center.x) * 1.15, center.y + (cur.y - center.y) * 1.15)
-  ctx.stroke()
+  centerPhase.value = saved.phase || 'idle'
+  // processedDataUrl 无法持久化（太大），恢复后若需补环则用原图 fallback
+  centerProcessedDataUrl.value = null
+  showStatus('📂 已从会话恢复上次识别状态', 'success')
 }
 
 // ===== 合成标注图（存历史 / 会话）=====
@@ -863,17 +551,17 @@ function goExport() {
 
 // ===== 生命周期 =====
 onMounted(() => {
+  restoreFromSession()
   document.addEventListener('keydown', onCenterKeydown)
-  document.addEventListener('keydown', onZoomKeydown)
-  window.addEventListener('resize', onZoomResize)
   initDragDrop(loadFiles, () => true)
 })
 onUnmounted(() => {
-  cleanupCenterAdjust?.()
-  closeZoom()
   document.removeEventListener('keydown', onCenterKeydown)
-  document.removeEventListener('keydown', onZoomKeydown)
-  window.removeEventListener('resize', onZoomResize)
+})
+
+// 圆心变更时自动持久化
+watch(detectedCenter, () => {
+  if (centerPhase.value === 'awaiting-center') persistToSession()
 })
 </script>
 
@@ -888,6 +576,8 @@ onUnmounted(() => {
         <feConvolveMatrix order="3" :kernelMatrix="edgeMatrix" />
       </filter>
     </svg>
+    <!-- 隐藏 img 供算法调试帧写入 -->
+    <img ref="algoImageRef" class="hidden" alt="" />
 
     <!-- 上传 / 状态 -->
     <n-card :bordered="false" class="bg-card">
@@ -903,9 +593,9 @@ onUnmounted(() => {
           <template #icon><i class="i-carbon:upload" /></template>
           上传牛顿环图像
         </n-button>
-        <n-tag v-if="fileName" :bordered="false" round
-          >{{ fileName }} · {{ imgWidth }}×{{ imgHeight }}</n-tag
-        >
+        <n-tag v-if="fileName" :bordered="false" round>
+          {{ fileName }} · {{ imgWidth }}×{{ imgHeight }}
+        </n-tag>
         <span class="text-xs opacity-50">支持拖拽图片到页面任意处</span>
       </n-space>
     </n-card>
@@ -931,35 +621,32 @@ onUnmounted(() => {
       </div>
     </n-card>
 
-    <!-- 主视图：原图 + 覆盖层 -->
-    <n-card v-if="imgState.src" :bordered="false" class="bg-card" title="识别视图">
+    <!-- 识别视图 (RingCanvasViewer) -->
+    <n-card :bordered="false" class="bg-card" title="识别视图">
       <template #header-extra>
-        <n-space :size="8">
-          <n-switch v-model:value="resultGrayscale" size="small">
-            <template #checked>灰度</template>
-            <template #unchecked>彩色</template>
-          </n-switch>
-          <n-button size="small" :disabled="!zoomCanUse" @click="openZoom">
-            <template #icon><i class="i-carbon:maximize" /></template>
-            全屏放大补环
-          </n-button>
-        </n-space>
+        <n-button size="small" :disabled="!zoomCanUse" @click="openZoom">
+          <template #icon><i class="i-carbon:maximize" /></template>
+          全屏放大
+        </n-button>
       </template>
-      <div class="flex justify-center">
-        <div class="relative inline-block max-w-full">
-          <img
-            ref="resultImageRef"
-            :src="resultImageSrc"
-            class="block max-w-full select-none"
-            :style="previewFilterStyle"
-            alt="识别底图"
-          />
-          <canvas
-            ref="resultCanvasRef"
-            class="pointer-events-none absolute inset-0 h-full w-full"
-          />
-        </div>
-      </div>
+      <RingCanvasViewer
+        v-if="!zoomOpen"
+        v-model:grayscale="resultGrayscale"
+        :src="imgState.src"
+        :width="imgWidth"
+        :height="imgHeight"
+        :rings="enabledRings"
+        :center="detectedCenter"
+        :filter-style="previewFilterStyle"
+        :fullscreen="false"
+        :interactive="centerPhase === 'done'"
+        :center-draggable="centerPhase === 'awaiting-center'"
+        :hovered-ring="hoveredRing"
+        :show-center="centerPhase !== 'idle' && !!detectedCenter"
+        :cross-arm="centerCrossArm"
+        @click-image="onViewerClick"
+        @update:center="onViewerCenterUpdate"
+      />
 
       <!-- 圆心确认面板 -->
       <div v-if="centerPhase === 'awaiting-center'" class="mt-4">
@@ -992,24 +679,20 @@ onUnmounted(() => {
       </div>
     </n-card>
 
-    <!-- 环人工核对（表1）+ 参数 -->
-    <n-card
-      v-if="centerPhase === 'done'"
-      :bordered="false"
-      class="bg-card"
-      title="表1 · 环人工核对"
-    >
+    <!-- 环人工核对（表1）-->
+    <n-card :bordered="false" class="bg-card" title="表1 · 环人工核对">
       <template #header-extra>
         <n-space align="center" :size="10">
           <span class="text-xs opacity-60">顺延重排</span>
           <n-switch
             v-model:value="renumberOnRemove"
             size="small"
+            :disabled="centerPhase !== 'done'"
             @update:value="onRenumberModeChange"
           />
         </n-space>
       </template>
-      <div class="overflow-x-auto">
+      <div v-if="centerPhase === 'done' && ringList.length" class="overflow-x-auto">
         <table class="w-full border-collapse text-sm">
           <thead>
             <tr class="bg-black/5">
@@ -1059,10 +742,13 @@ onUnmounted(() => {
           </tbody>
         </table>
       </div>
+      <div v-else class="py-8 text-center text-sm opacity-40">
+        请先上传图像并完成环识别
+      </div>
     </n-card>
 
     <!-- 标定值 + 逐差步长 -->
-    <n-card v-if="centerPhase === 'done'" :bordered="false" class="bg-card" title="测量参数">
+    <n-card :bordered="false" class="bg-card" title="测量参数">
       <n-space align="center" wrap :size="16">
         <n-space align="center" :size="8">
           <span class="text-sm">像素标定值 (mm/像素)</span>
@@ -1075,13 +761,12 @@ onUnmounted(() => {
         <n-button size="small" @click="router.push('/calibration')">去标定页获取标定值</n-button>
       </n-space>
       <p class="mt-2 text-xs opacity-50">
-        标定值未设定（空 / ≤0）时，直径 mm
-        与曲率半径按未设定处理；可手动输入或在标定页「应用到识别」。
+        标定值未设定（空 / ≤0）时，直径 mm 与曲率半径按未设定处理；可手动输入或在标定页「应用到识别」。
       </p>
     </n-card>
 
     <!-- 预处理预览（不影响识别算法） -->
-    <n-card v-if="imgState.src" :bordered="false" class="bg-card" size="small">
+    <n-card :bordered="false" class="bg-card" size="small">
       <n-collapse>
         <n-collapse-item title="预处理参数调试（仅影响预览显示，不改变识别算法）" name="filter">
           <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1129,62 +814,53 @@ onUnmounted(() => {
 
     <!-- 计算结果（表2 + 不确定度） -->
     <result-tables v-if="centerPhase === 'done'" :payload="resultPayload" />
+    <n-card v-else :bordered="false" class="bg-card" title="计算结果">
+      <div class="py-8 text-center text-sm opacity-40">请先完成环识别</div>
+    </n-card>
 
     <!-- 结果操作 -->
-    <n-card v-if="centerPhase === 'done'" :bordered="false" class="bg-card">
+    <n-card :bordered="false" class="bg-card">
       <n-space>
-        <n-button type="primary" @click="saveResult">
+        <n-button type="primary" :disabled="centerPhase !== 'done'" @click="saveResult">
           <template #icon><i class="i-carbon:save" /></template>
           保存到历史
         </n-button>
-        <n-button @click="goExport">
+        <n-button :disabled="centerPhase !== 'done'" @click="goExport">
           <template #icon><i class="i-carbon:download" /></template>
           去导出页
         </n-button>
       </n-space>
     </n-card>
 
-    <!-- 全屏放大补环弹窗 -->
+    <!-- 全屏放大弹窗 -->
     <n-modal
       :show="zoomOpen"
       preset="card"
-      title="全屏放大补环（滚轮缩放 / 拖拽平移 / 点击补环 / ESC 关闭）"
-      class="!w-[95vw] max-w-6xl"
+      title="全屏放大补环（拖拽平移 / 点击补环 / ESC 关闭）"
+      class="!w-100dvw !h-100dvh !max-w-none"
       :bordered="false"
       :mask-closable="false"
+      content-style="padding:0;height:100%;display:flex;flex-direction:column;overflow:hidden"
       @update:show="(v) => !v && closeZoom()"
     >
-      <div
-        ref="zoomStageRef"
-        class="relative h-[70vh] w-full overflow-hidden rounded bg-black"
-        :class="zoomPanning ? 'cursor-grabbing' : 'cursor-crosshair'"
-        @wheel="onZoomWheel"
-        @mousedown="onZoomMouseDown"
-        @mousemove="onZoomMouseMove"
-        @mouseleave="onZoomMouseLeave"
-        @click="onZoomClick"
-      >
-        <img
-          :src="imgState.src"
-          class="absolute left-0 top-0 select-none"
-          :style="zoomImgStyle"
-          alt="放大底图"
-        />
-        <canvas ref="zoomCanvasRef" class="pointer-events-none absolute inset-0" />
-      </div>
-      <div class="mt-2 flex items-center justify-between text-xs opacity-60">
-        <span>
-          缩放 {{ zoomScale.toFixed(2) }}x
-          <template v-if="zoomCursor?.inside">
-            · 光标 ({{ zoomCursor.x.toFixed(0) }}, {{ zoomCursor.y.toFixed(0) }}) · 半径
-            {{ zoomCursor.r.toFixed(1) }}px
-          </template>
-        </span>
-        <n-space :size="8">
-          <n-button size="tiny" @click="resetZoomView">复位全览</n-button>
-          <n-button size="tiny" @click="closeZoom">关闭</n-button>
-        </n-space>
-      </div>
+      <RingCanvasViewer
+        v-model:grayscale="resultGrayscale"
+        :src="imgState.src"
+        :width="imgWidth"
+        :height="imgHeight"
+        :rings="enabledRings"
+        :center="detectedCenter"
+        :filter-style="previewFilterStyle"
+        :fullscreen="true"
+        :interactive="true"
+        :hovered-ring="hoveredRing"
+        :show-center="true"
+        :cross-arm="centerCrossArm"
+        :initial-crop="zoomCrop"
+        @click-image="onViewerClick"
+        @update:center="onViewerCenterUpdate"
+        @close="closeZoom"
+      />
     </n-modal>
   </div>
 </template>

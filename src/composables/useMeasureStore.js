@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import { useStorage } from '@vueuse/core'
-import { PIXEL_SCALE_KEY } from '@/utils/constants'
+import { PIXEL_SCALE_KEY, IMAGE_SESSION_KEY } from '@/utils/constants'
 
 // 跨页共享的「测量会话」状态（旧项目是单页双 Tab，所有状态挤在一个 setup()；
 // 新架构拆成识别 / 标定 / 数据 / 导出多页，故把这些真正跨页的量提到模块级单例）。
@@ -13,6 +13,10 @@ export const pixelScale = useStorage(PIXEL_SCALE_KEY, '')
 
 // 会话快照（不落盘：图片 dataURL 体积大，仅在内存中跨页传递；需要留存请用历史页 / 导出 JSON）
 export const session = ref(null)
+
+// 识别页图像会话（sessionStorage，不压缩，刷新不丢、关 tab 自动清理）
+// 结构: { src, fileName, width, height, center, rings, phase, filterParams, grayscale, outerRadius }
+export const imageSession = useStorage(IMAGE_SESSION_KEY, null, sessionStorage)
 // 结构约定：
 // {
 //   fileName, imageSrc, imageWidth, imageHeight,
@@ -41,12 +45,33 @@ export function useMeasureStore() {
     session.value = null
   }
 
+  function saveImageSession(payload) {
+    try {
+      imageSession.value = payload ? { ...payload, updatedAt: Date.now() } : null
+    } catch {
+      // sessionStorage 满（大图超 ~5MB），graceful 降级：不存，下次刷新丢失
+      imageSession.value = null
+    }
+  }
+
+  function loadImageSession() {
+    return imageSession.value || null
+  }
+
+  function clearImageSession() {
+    imageSession.value = null
+  }
+
   return {
     pixelScale,
     session,
+    imageSession,
     setPixelScale,
     pixelScaleNumber,
     setSession,
     clearSession,
+    saveImageSession,
+    loadImageSession,
+    clearImageSession,
   }
 }

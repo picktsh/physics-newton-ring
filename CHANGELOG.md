@@ -22,6 +22,33 @@
 - 识别算法细节阈值（环级数范围、半径精度、圆心允许偏差）。
 - 导出表格 / 网页视图的列与样式。
 
+## 2026-09-15 · 识别页重构：RingCanvasViewer 组件抽取 + 全屏放大重设计 + 会话持久化
+
+### Added
+
+- **`src/components/RingCanvasViewer.vue`**：独立的「底图 + canvas 标注 + 顶部工具栏 + 交互」组件，同时服务 inline 视图和全屏弹窗，通过 `fullscreen` prop 切换布局策略。
+- **sessionStorage 图像会话持久化**：`useMeasureStore` 新增 `imageSession`（不压缩、刷新不丢、关 tab 自动清理），识别页 `onMounted` 自动恢复上次状态。
+- **工具栏**：缩放 +/-、倍率显示、复位、彩色/灰度开关、光标坐标 + 半径信息，统一在顶部。
+
+### Changed
+
+- **放大弹窗**：从 `95vw + max-w-6xl + 70vh` 改为 `100dvw × 100dvh` 全屏；`content-style="padding:0"` 消除 naive-ui card 内边距。
+- **缩放方式**：移除滚轮缩放（与页面滚动冲突），改为仅工具栏按钮 +/- 控制。
+- **布局模式**：从 transform 定位改为原生滚动容器（`overflow: auto`），canvas 始终视口大小，绘制 transform 使用 `-scrollLeft/-scrollTop` 偏移，图像与 canvas 坐标严格对齐。
+- **UI 板块始终可见**：移除 `v-if="imgState.src"` / `v-if="centerPhase === 'done'"` 条件，改为始终渲染 card 骨架 + 空态提示文字 + 禁用控件。
+- **RecognitionView 瘦身**：1208 → ~700 行，全部 zoom/canvas/interaction 逻辑迁入组件。
+
+### 关键取舍
+
+- **不用 Teleport**：全屏放大通过 `v-if` 切换渲染位置（inline vs modal），避免 naive-ui modal 层叠上下文 + scoped style 边界问题。
+- **sessionStorage 不压缩**：牛顿环实验图通常 1–3 MB dataURL，在 5 MB 配额内；超限时 graceful 降级（不存，不阻断流程）。
+- **inline 视图用 `aspect-ratio`**：容器高度随图片比例自适应，放大后出滚动条，不硬编码 vh 值。
+
+### 死代码（待后续清理）
+
+- `interactionHandler.js`：`initCanvasInteraction` / `onTableRowHover` / `onTableRowLeave` / `initCenterAdjustInteraction` 已无引用。
+- `canvasDrawer.js`：`drawDetectionResults` / `drawCenterOverlay` 已无引用。
+
 ## 2026-09-15 · 文档中心（内置手册 + 通用 MD 查看器）
 
 ### Added

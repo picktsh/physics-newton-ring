@@ -15,6 +15,8 @@ export const THEME_KEY = `${STORAGE_PREFIX}theme`
 export const WATERMARK_KEY = `${STORAGE_PREFIX}watermark`
 // 像素标定值 (mm/像素) 跨页共享持久化：标定页「应用到识别」写入，识别/数据/导出页读取
 export const PIXEL_SCALE_KEY = `${STORAGE_PREFIX}pixel-scale`
+// 识别页图像会话 (sessionStorage，不压缩，刷新不丢、关 tab 自动清理)
+export const IMAGE_SESSION_KEY = `${STORAGE_PREFIX}image-session`
 // 标定页图片缓存（双图对齐用，sessionStorage，与旧 CALIB_KEY 同口径，刷新内保持）
 export const CALIB_IMAGES_KEY = `${STORAGE_PREFIX}calib-images`
 export const CALIB_POINTS_KEY = `${STORAGE_PREFIX}calib-points`
