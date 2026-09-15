@@ -1,8 +1,10 @@
 // 物理 / 仪器常量（抽芯自旧 js/constants.js，1:1 保留）
 // 钠光波长 (m)
 export const LAMBDA = 589.3e-9
-// 读数显微镜示值误差限 Δ (mm)，用于直径 D 的 B 类不确定度 u_B = Δ/k（正态 p=0.683, k=1）
+// 读数显微镜示值误差限 Δ (mm)，用于直径 D 的 B 类不确定度 u_B = Δ/k（正态 p=0.95, k=2）
 export const INSTRUMENT_ERROR = 0.002
+// 包含因子 k（置信概率 p=0.95）：B 类 u_B = Δ/k 与扩展 U = k·u_C 共用同一口径
+export const COVERAGE_K = 2
 // 暗环标记颜色 RGB
 export const RING_COLOR = '144, 238, 144'
 
@@ -31,9 +33,8 @@ export const DOCS_TAB_PERSIST_MAX_BYTES = 1 * 1024 * 1024
 export const DOCS_TABS_TOTAL_MAX_BYTES = 3 * 1024 * 1024
 // - zip 压缩包体积上限，超过 unzip 前二次确认（避免长时间冻结主线程）
 export const DOCS_ZIP_MAX_BYTES = 50 * 1024 * 1024
-// - 内置 3 篇文档的元数据：文件名（含中文）→ 展示标题；fetch 时 encodeURI
+// - 内置 2 篇文档的元数据：文件名（含中文）→ 展示标题；fetch 时 encodeURI
 export const DOCS_BUILTIN = [
   { file: '操作流程与建议.md', title: '操作流程与建议' },
-  { file: '牛顿环实验结合OpenCV方案及需求.md', title: 'OpenCV 方案与需求' },
   { file: '重构项目需求说明.md', title: '重构需求说明' },
 ]

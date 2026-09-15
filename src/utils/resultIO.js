@@ -83,13 +83,13 @@ export function toCSV(payload) {
   csv += `像素标定:,${pixelScale} mm/像素\n`
   csv += `平均曲率半径:,${(averageR || 0).toFixed(3)} m\n`
   if (uncertainty && uncertainty.valid) {
-    csv += `测量结果 (p=0.683):,R = (${uncertainty.meanText} ± ${uncertainty.uText}) m\n`
+    csv += `测量结果 (p=0.95):,R = (${uncertainty.meanText} ± ${uncertainty.uText}) m\n`
     csv += `仪器示值误差限 Δ:,${uncertainty.deltaInstrument} mm\n`
     csv += `直径 B 类 u_B(D):,${uncertainty.uBDText} mm\n`
     csv += `A类不确定度 u_A:,${uncertainty.uAText} m\n`
     csv += `B类不确定度 u_B:,${uncertainty.uBText} m\n`
     csv += `合成标准不确定度 u_C:,${uncertainty.uCText} m\n`
-    csv += `扩展不确定度 U (p=0.683, k=${uncertainty.kText}):,${uncertainty.uText} m\n`
+    csv += `扩展不确定度 U (p=0.95, k=${uncertainty.kText}):,${uncertainty.uText} m\n`
     csv += `相对不确定度 U/R:,${uncertainty.relativeText}\n`
   }
   csv += '\n'
@@ -114,7 +114,7 @@ export function toMarkdown(payload) {
   lines.push(`- 像素标定：${pixelScale} mm/像素`)
   lines.push(`- 平均曲率半径：${(averageR || 0).toFixed(3)} m`)
   if (uncertainty && uncertainty.valid) {
-    lines.push(`- 测量结果 (p=0.683)：R = (${uncertainty.meanText} ± ${uncertainty.uText}) m`)
+    lines.push(`- 测量结果 (p=0.95)：R = (${uncertainty.meanText} ± ${uncertainty.uText}) m`)
     lines.push(`- 相对不确定度 U/R：${uncertainty.relativeText}`)
   }
   lines.push('\n## 表1 各暗环直径测量数据\n')
@@ -152,7 +152,7 @@ export function toHTMLPage(payload) {
     .join('')
   const u =
     uncertainty && uncertainty.valid
-      ? `<p>测量结果 (p=0.683)：<b>R = (${esc(uncertainty.meanText)} ± ${esc(uncertainty.uText)}) m</b>，相对不确定度 U/R = ${esc(uncertainty.relativeText)}</p>
+      ? `<p>测量结果 (p=0.95)：<b>R = (${esc(uncertainty.meanText)} ± ${esc(uncertainty.uText)}) m</b>，相对不确定度 U/R = ${esc(uncertainty.relativeText)}</p>
        <p>u_A = ${esc(uncertainty.uAText)} m，u_B = ${esc(uncertainty.uBText)} m，u_C = ${esc(uncertainty.uCText)} m，U = ${esc(uncertainty.uText)} m (k=${esc(uncertainty.kText)})</p>`
       : '<p class="muted">未评定不确定度（数据组数不足）。</p>'
   return `<!DOCTYPE html>

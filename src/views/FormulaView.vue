@@ -25,8 +25,8 @@ const fRadiusUnit =
 const fPixel = 'D\\,[\\text{mm}] = D_{\\text{px}}\\,[\\text{px}] \\times S\\,[\\text{mm/px}]'
 
 // 四、不确定度五步评定（A 类 + B 类）
-const fStep1 = 'u_B(x) = \\dfrac{\\Delta}{k} = \\Delta'
-const fStep2 = 'u_B(D) = \\sqrt{2}\\,u_B(x) = \\sqrt{2}\\,\\Delta'
+const fStep1 = 'u_B(x) = \\dfrac{\\Delta}{k}'
+const fStep2 = 'u_B(D) = \\sqrt{2}\\,u_B(x) = \\sqrt{2}\\,\\dfrac{\\Delta}{k}'
 const fStep3 = '\\dfrac{u_B(R)}{R} = \\dfrac{2\\,u_B(D)}{D_m^2 - D_n^2}\\sqrt{D_m^2 + D_n^2}'
 const fStep4a = 's = \\sqrt{\\dfrac{\\sum_i (R_i - \\bar{R})^2}{k-1}}'
 const fStep4b =
@@ -90,7 +90,7 @@ const fFinal = 'R = (\\bar{R} \\pm U)\\ \\text{m},\\qquad U_R = \\dfrac{U}{\\bar
         <section>
           <div class="mb-1 flex items-center gap-2">
             <n-tag size="small" type="info" :bordered="false" round>① 仪器示值误差限</n-tag>
-            <span class="text-sm opacity-70">直径单次读数的 B 类分量（正态分布 p=0.683, k=1）</span>
+            <span class="text-sm opacity-70">直径单次读数的 B 类分量（正态分布 p=0.95, k=2）</span>
           </div>
           <KatexFormula :latex="fStep1" block />
         </section>
@@ -164,7 +164,7 @@ const fFinal = 'R = (\\bar{R} \\pm U)\\ \\text{m},\\qquad U_R = \\dfrac{U}{\\bar
             <tr>
               <td class="border border-gray-400/30 px-3 py-1.5"><KatexFormula latex="k" /></td>
               <td class="border border-gray-400/30 px-3 py-1.5">包含因子</td>
-              <td class="border border-gray-400/30 px-3 py-1.5">1（正态分布，p = 0.683）</td>
+              <td class="border border-gray-400/30 px-3 py-1.5">2（正态分布，p = 0.95）</td>
             </tr>
             <tr>
               <td class="border border-gray-400/30 px-3 py-1.5">

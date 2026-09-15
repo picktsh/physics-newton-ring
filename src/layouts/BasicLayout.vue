@@ -46,7 +46,7 @@ function toggleMenu() {
     :line-height="100"
     :width="300"
     :z-index="1500"
-    content="牛顿环测量工具"
+    content="牛顿环数字化智能测量系统"
     font-color="rgba(128, 128, 128, .08)"
     fullscreen
   />

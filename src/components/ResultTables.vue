@@ -30,7 +30,7 @@ const step1Latex = computed(() =>
   u.value ? `\\Delta = ${u.value.deltaInstrument}\\ \\text{mm}` : '',
 )
 const step2Latex = computed(() =>
-  u.value ? `u_B(D) = \\sqrt{2}\\,\\Delta = ${u.value.uBDText}\\ \\text{mm}` : '',
+  u.value ? `u_B(D) = \\sqrt{2}\\,\\dfrac{\\Delta}{k} = ${u.value.uBDText}\\ \\text{mm}` : '',
 )
 const step3Latex = computed(() =>
   u.value
@@ -63,7 +63,7 @@ const finalLatex = computed(() =>
         <n-statistic label="平均曲率半径 R̄" :value="(payload.averageR || 0).toFixed(3)">
           <template #suffix>m</template>
         </n-statistic>
-        <n-statistic v-if="showU" label="测量结果 (p=0.683)">
+        <n-statistic v-if="showU" label="测量结果 (p=0.95)">
           <span class="text-lg font-semibold">
             <KatexFormula :latex="resultLatex" />
           </span>
@@ -142,7 +142,7 @@ const finalLatex = computed(() =>
       <n-descriptions label-placement="left" bordered :column="1" size="small">
         <n-descriptions-item label="① 仪器示值误差限 Δ">
           <KatexFormula :latex="step1Latex" />
-          <span class="ml-1 opacity-70">（正态分布 p=0.683, k=1）</span>
+          <span class="ml-1 opacity-70">（正态分布 p=0.95, k=2）</span>
         </n-descriptions-item>
         <n-descriptions-item label="② 直径 B 类 u_B(D)">
           <KatexFormula :latex="step2Latex" />

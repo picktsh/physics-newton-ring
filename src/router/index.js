@@ -29,7 +29,7 @@ export const routes = [
     name: 'recognition',
     component: () => import('@/views/RecognitionView.vue'),
     meta: {
-      title: '识别',
+      title: '识别环纹',
       icon: 'i-carbon:image-search',
       description: '上传牛顿环图像，自动识别圆心与暗环，人工核对后计算曲率半径',
     },
@@ -70,7 +70,7 @@ export const routes = [
     name: 'export',
     component: () => import('@/views/ExportView.vue'),
     meta: {
-      title: '导出',
+      title: '导出结果',
       icon: 'i-carbon:download',
       description: '将当前测量结果导出为图片 / JSON / 表格 / 网页 / CSV',
     },
@@ -79,7 +79,7 @@ export const routes = [
     path: '/docs',
     name: 'docs',
     component: () => import('@/views/DocsView.vue'),
-    // 文档中心：内置 3 篇用户向手册 + 本地 md/zip 拖入预览 + 4 种导出（md/doc/png/print）
+    // 文档中心：内置 2 篇用户向手册 + 本地 md/zip 拖入预览 + 4 种导出（md/doc/png/print）
     meta: {
       title: '文档中心',
       icon: 'i-carbon:documentation',
@@ -96,7 +96,7 @@ const router = createRouter({
 
 // 标题联动（§9）
 router.afterEach((to) => {
-  const base = '牛顿环测量工具'
+  const base = '牛顿环数字化智能测量系统'
   document.title = to.meta?.title ? `${to.meta.title} · ${base}` : base
 })
 

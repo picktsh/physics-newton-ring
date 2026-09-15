@@ -1,4 +1,4 @@
-import { LAMBDA, INSTRUMENT_ERROR } from './constants'
+import { LAMBDA, INSTRUMENT_ERROR, COVERAGE_K } from './constants'
 
 // 计算层（抽芯自旧 js/data-calculator.js，公式与阈值 1:1 保留，§11.5#4/#5）
 
@@ -186,8 +186,8 @@ export function calculateRadiusUncertainty(radiusData, averageRadius) {
   const k = radiusData?.length || 0
   if (k === 0 || !(averageRadius > 0)) return null
 
-  // 1. 直径 D 的 B 类: 单次示值误差限 Δ 按正态 p=0.683、k=1
-  const uBx = INSTRUMENT_ERROR / 1
+  // 1. 直径 D 的 B 类: 单次示值误差限 Δ 按正态 p=0.95、k=2
+  const uBx = INSTRUMENT_ERROR / COVERAGE_K
   const uBD = Math.sqrt(2) * uBx
 
   // 2. R 的 B 类相对不确定度 (逐组)
@@ -229,10 +229,10 @@ export function calculateRadiusUncertainty(radiusData, averageRadius) {
   // 4. 合成标准不确定度
   const uC = Math.sqrt(uA * uA + uB * uB)
 
-  // 5. 扩展不确定度 (p=0.683, k=1): U = u_C
+  // 5. 扩展不确定度 (p=0.95, k=2): U = k·u_C
   let nuEff = Infinity
   if (uA > 0 && uC > 0) nuEff = Math.pow(uC, 4) / (Math.pow(uA, 4) / nuA)
-  const U = uC
+  const U = COVERAGE_K * uC
   const relative = averageRadius > 0 ? U / averageRadius : 0
 
   const uFmt = sigU(U)
@@ -263,7 +263,7 @@ export function calculateRadiusUncertainty(radiusData, averageRadius) {
     uBxText: uBx.toFixed(6),
     uBDText: uBD.toFixed(6),
     nuEffText: isFinite(nuEff) ? nuEff.toFixed(1) : '∞',
-    kText: '1',
+    kText: String(COVERAGE_K),
     relativeText: `${sigU(relative * 100).text}%`,
   }
 }
