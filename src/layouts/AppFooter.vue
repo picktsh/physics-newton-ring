@@ -13,7 +13,7 @@ const lambdaNm = (LAMBDA * 1e9).toFixed(1)
        与背层 bodyColor 混色后就和侧栏底色对不上了 -->
   <footer class="shrink-0 bg-layout px-4 py-3 text-xs leading-relaxed md:px-6">
     <div class="flex flex-wrap items-center gap-x-3 gap-y-1 opacity-60">
-      <span>© {{ year }} 牛顿环测量工具 · 大学物理实验 · 等厚干涉测透镜曲率半径</span>
+      <span>© {{ year }} 牛顿环数字化智能测量系统 · 大学物理实验 · 等厚干涉测透镜曲率半径</span>
       <span class="opacity-40">|</span>
       <span>
         默认光源钠光 λ = {{ lambdaNm }} nm · 读数误差限取自读数显微镜示值 · 逐差法求平均环间距 ·

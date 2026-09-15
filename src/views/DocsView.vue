@@ -17,7 +17,7 @@ import { renderMarkdown } from '@/utils/markdownRenderer'
 import { runMermaid } from '@/utils/mermaidRunner'
 import { exportMd, exportDoc, exportPng, printDoc, openInNewWindow } from '@/utils/docsExport'
 
-// 文档中心：内置 3 篇 + 本地拖入（md / txt / zip），NTabs 承载、NDropdown 收拢导出。
+// 文档中心：内置 2 篇 + 本地拖入（md / txt / zip），NTabs 承载、NDropdown 收拢导出。
 // 导出：.md 原文 / .doc（Word） / .png（html2canvas+水印） / 打印（同文档克隆 host+水印，另存 PDF）。
 // pdf / 图片走新窗口原生预览；zip 展开多 md tab + 相对图片 objectURL。详见 CHANGELOG [未发布]。
 
@@ -239,7 +239,7 @@ async function onExportSelect(key) {
 
 <template>
   <div ref="rootRef" class="docs-view flex flex-col gap-3">
-    <!-- Tab 栏：NTabs 卡片式，内置 3 篇不可关，本地 tab closable，addable 的 + 触发本地导入 -->
+    <!-- Tab 栏：NTabs 卡片式，内置 2 篇不可关，本地 tab closable，addable 的 + 触发本地导入 -->
     <n-tabs
       type="card"
       :value="activeKey"

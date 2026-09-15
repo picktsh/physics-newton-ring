@@ -8,7 +8,7 @@ import {
 import { loadZipDoc, revokeAssets } from '@/utils/zipDocLoader'
 
 // 文档中心跨页/跨组件状态（模块级单例，沿用 useMeasureStore 约定）：
-// - builtinState：3 篇内置 md 的 fetch 缓存，惰性并发；
+// - builtinState：2 篇内置 md 的 fetch 缓存，惰性并发；
 // - localTabs：用户拖入的本地 tab 列表，md/txt 走文本；zip 展开成多个 transient tab；
 // - sessionStorage 快照：只存 transient:false 的本地 tab；× 关闭清；刷新保留；
 // - 去重定位：新加入内容若与已有 tab 完全一致 → 激活既有；仅同名不同内容 → 追加 ` (n)`；
@@ -27,7 +27,7 @@ let fetchStarted = false
 let hydrated = false
 
 // ---------------------------------------------------------------------------
-// 内置 3 篇 fetch：视图 mount 时调 loadBuiltins；单例守卫，重复调用无副作用
+// 内置 2 篇 fetch：视图 mount 时调 loadBuiltins；单例守卫，重复调用无副作用
 // ---------------------------------------------------------------------------
 async function fetchOne(b) {
   builtinState.value = {
