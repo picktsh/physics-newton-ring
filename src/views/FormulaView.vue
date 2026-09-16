@@ -158,7 +158,9 @@ const fFinal = 'R = (\\bar{R} \\pm U)\\ \\text{m},\\qquad U_R = \\dfrac{U}{\\bar
             </tr>
             <tr>
               <td class="border border-gray-400/30 px-3 py-1.5"><KatexFormula latex="\Delta" /></td>
-              <td class="border border-gray-400/30 px-3 py-1.5">读数显微镜示值误差限</td>
+              <td class="border border-gray-400/30 px-3 py-1.5">
+                图像测量系统示值误差限 <KatexFormula latex="\boldsymbol{\Delta}" />
+              </td>
               <td class="border border-gray-400/30 px-3 py-1.5">{{ deltaMM }} mm</td>
             </tr>
             <tr>

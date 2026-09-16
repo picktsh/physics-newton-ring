@@ -1,7 +1,7 @@
 // 物理 / 仪器常量（抽芯自旧 js/constants.js，1:1 保留）
 // 钠光波长 (m)
 export const LAMBDA = 589.3e-9
-// 读数显微镜示值误差限 Δ (mm)，用于直径 D 的 B 类不确定度 u_B = Δ/k（正态 p=0.95, k=2）
+// 图像测量系统示值误差限 Δ (mm)，用于直径 D 的 B 类不确定度 u_B = Δ/k（正态 p=0.95, k=2）
 export const INSTRUMENT_ERROR = 0.002
 // 包含因子 k（置信概率 p=0.95）：B 类 u_B = Δ/k 与扩展 U = k·u_C 共用同一口径
 export const COVERAGE_K = 2
