@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, nextTick, onMounted } from 'vue'
 import { NCard, NInput, NButton } from 'naive-ui'
 
 // 入口动态密码软锁（原样搬入旧 access-lock.js，含 2026/9/25 自动失效，§11.5#7）。
@@ -43,7 +43,17 @@ onMounted(() => {
 })
 
 function onInput(v) {
-  input.value = String(v).replace(/\D/g, '')
+  const digits = String(v).replace(/\D/g, '')
+  if (digits === input.value) {
+    // 过滤后与原值相同（如又输入了一个非法字符）时 Vue 不会重渲染，
+    // 需借下一帧强制回写，清掉原生输入框里残留的非数字字符。
+    input.value = ''
+    nextTick(() => {
+      input.value = digits
+    })
+  } else {
+    input.value = digits
+  }
   error.value = false
 }
 
@@ -63,19 +73,22 @@ function submit() {
 </script>
 
 <template>
-  <div v-if="visible" class="fixed inset-0 z-[3000] flex items-center justify-center bg-layout">
-    <n-card class="w-80" :bordered="false">
+  <div v-if="visible" class="fixed inset-0 z-[3000] flex items-center justify-center bg-base">
+    <!-- 遮罩底色用 base 而非 layout：浅色下 layout 与 card 同为纯白，卡片会看不出底色 -->
+    <n-card class="w-80 shadow-md" bordered>
       <p class="mb-3 text-center font-semibold">请输入 4 位访问密码</p>
       <n-input
         :value="input"
         type="password"
+        size="large"
         maxlength="4"
         placeholder="4 位数字"
+        :input-props="{ inputmode: 'numeric', autocomplete: 'one-time-code' }"
         @update:value="onInput"
         @keydown.enter="submit"
       />
       <p v-show="error" class="mt-2 text-xs text-red-400">密码错误，请重试</p>
-      <n-button type="primary" block class="mt-3" @click="submit">进入</n-button>
+      <n-button type="primary" block size="large" class="mt-4" @click="submit">进入</n-button>
     </n-card>
   </div>
 </template>
