@@ -186,32 +186,25 @@ const resultPayload = computed(() => {
 })
 
 // ===== 全屏放大 =====
+// 纯视图放大：交互模式跟随当前阶段（与内联视图一致），不与「补环」功能绑定。
+// 未出结果时相当于纯放大查看器（补环由 onViewerClick 的 phase 守卫兜底）
 const zoomOpen = ref(false)
-const zoomCrop = ref(null)
-const zoomCanUse = computed(() => centerPhase.value === 'done' && !!imgState.src)
 
-function computeZoomCrop() {
-  const center = detectedCenter.value || imgState.center
-  if (!imgWidth.value || !imgHeight.value || !center) return null
-  let R = detectedOuterRadius.value
-  if (!(R > 0)) R = enabledRings.value.reduce((m, r) => Math.max(m, r.avgRadius), 0) * 1.02
-  if (!(R > 0)) return { x: 0, y: 0, w: imgWidth.value, h: imgHeight.value }
-  const side = Math.max(24, Math.round(2 * R))
-  const w = Math.min(side, imgWidth.value)
-  const h = Math.min(side, imgHeight.value)
-  const x = Math.max(0, Math.min(imgWidth.value - w, Math.round(center.x - w / 2)))
-  const y = Math.max(0, Math.min(imgHeight.value - h, Math.round(center.y - h / 2)))
-  return { x, y, w, h }
-}
 function openZoom() {
-  if (!zoomCanUse.value) return
-  zoomCrop.value = computeZoomCrop()
   zoomOpen.value = true
 }
 function closeZoom() {
   zoomOpen.value = false
-  zoomCrop.value = null
 }
+
+// 弹窗标题随阶段变化，明确当前放大视图内的操作语义
+const zoomTitle = computed(() => {
+  if (centerPhase.value === 'awaiting-center')
+    return '全屏放大 · 核对圆心（拖拽图像设置圆心 / ESC 关闭）'
+  if (centerPhase.value === 'done')
+    return '全屏放大 · 补环（点击补环 / 拖拽平移 / ESC 关闭）'
+  return '全屏放大（拖拽平移 / ESC 关闭）'
+})
 
 // ===== 日志 =====
 function showStatus(msg, type = 'info') {
@@ -600,10 +593,13 @@ async function restoreFromSession() {
 }
 
 // 「重置本页」：只清过程数据（圆心/环/阶段/参数），保留选图与工作图；图片库不动
+// 工作图仍在时立即重新自动检测圆心，回到「核对圆心」阶段（与初次载图行为一致），
+// 否则停在 idle 阶段且同图重选被 onTrayPick 短路，用户无从继续
 function resetPage() {
   clearImageSession()
   clearProcessState()
-  showStatus('🧹 已重置本页过程数据（选图保留）', 'info')
+  showStatus('🧹 已重置本页过程数据（选图保留），重新检测圆心…', 'info')
+  if (imgState.src) processImage()
 }
 
 // ===== 合成标注图（存历史 / 会话）=====
@@ -774,7 +770,7 @@ watchDebounced(
     <!-- 识别视图 (RingCanvasViewer) -->
     <n-card :bordered="false" class="bg-card" title="识别视图">
       <template #header-extra>
-        <n-button :disabled="!zoomCanUse" @click="openZoom">
+        <n-button @click="openZoom">
           <template #icon><i class="i-carbon:maximize" /></template>
           全屏放大
         </n-button>
@@ -979,7 +975,7 @@ watchDebounced(
     <n-modal
       :show="zoomOpen"
       preset="card"
-      title="全屏放大补环（拖拽平移 / 点击补环 / ESC 关闭）"
+      :title="zoomTitle"
       class="!w-100dvw !h-100dvh !max-w-none"
       :bordered="false"
       :mask-closable="false"
@@ -995,11 +991,11 @@ watchDebounced(
         :center="detectedCenter"
         :filter-style="previewFilterStyle"
         :fullscreen="true"
-        :interactive="true"
+        :interactive="centerPhase === 'done'"
+        :center-draggable="centerPhase === 'awaiting-center'"
         :hovered-ring="hoveredRing"
-        :show-center="true"
+        :show-center="centerPhase !== 'idle' && !!detectedCenter"
         :cross-arm="centerCrossArm"
-        :initial-crop="zoomCrop"
         @click-image="onViewerClick"
         @update:center="onViewerCenterUpdate"
         @close="closeZoom"
