@@ -49,16 +49,14 @@ export const DOCS_BUILTIN = [
   { file: '重构项目需求说明.md', title: '重构需求说明' },
 ]
 
-// 内置示例素材（public/samples/）命名约定：组号开头；同组标定对用 -a/-b 后缀，零散图无后缀。
+// 内置示例素材（public/samples/）命名约定：组号开头；同组标定对用 -A/-B 后缀，零散图无后缀。
 // group/slot 仅供展示徽章与标定页快捷赋值；kind 未设——零散图识别/标定皆可用作体验。
 // scale：标定对自带的默认鼓轮刻度 (mm)，赋槽时自动填充，仅占位——页面实测时可手改，改后值随会话持久化。
 export const SAMPLES_BUILTIN = [
-  { file: '1-a.jpg', title: '标定对 1 · A', group: '1', slot: 'a', scale: 12.345 },
-  { file: '1-b.jpg', title: '标定对 1 · B', group: '1', slot: 'b', scale: 13.456 },
-  { file: '2.jpg', title: '示例 2' },
-  { file: '3.jpg', title: '示例 3' },
-  { file: '4.jpg', title: '示例 4' },
-  { file: '5.jpg', title: '示例 5' },
-  { file: '6.webp', title: '示例 6' },
-  { file: '7.jpg', title: '示例 7' },
+  { file: '1-A.jpg', title: '标定对 1 · A', group: '1', slot: 'a', scale: 25.351 },
+  { file: '1-B.jpg', title: '标定对 1 · B', group: '1', slot: 'b', scale: 26.201 },
+  { file: '2-A.jpg', title: '标定对 2 · A', group: '2', slot: 'a', scale: 28.984 },
+  { file: '2-B.jpg', title: '标定对 2 · B', group: '2', slot: 'b', scale: 29.835 },
+  { file: '3-A.jpg', title: '标定对 3 · A', group: '3', slot: 'a', scale: 27.309 },
+  { file: '3-B.jpg', title: '标定对 3 · B', group: '3', slot: 'b', scale: 28.342 },
 ]
