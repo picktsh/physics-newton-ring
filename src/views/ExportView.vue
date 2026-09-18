@@ -13,12 +13,13 @@ import {
   downloadBlob,
 } from '@/utils/resultIO'
 import { drawOverlay } from '@/utils/canvasDrawer'
-import { useMeasureStore } from '@/composables/useMeasureStore'
+import { storeToRefs } from 'pinia'
+import { useMeasureStore } from '@/stores/measure'
 
 // §8 导出页：图片 / JSON / 表格 / 网页 / CSV 五种导出（§11.5#3）
 const message = useMessage()
 const router = useRouter()
-const { session } = useMeasureStore()
+const { session } = storeToRefs(useMeasureStore())
 
 const imported = ref(null) // 由 JSON 导入的 payload（无原图时不可导出图片）
 
@@ -119,16 +120,14 @@ function exportHTML() {
       <n-empty v-if="!payload" description="暂无可导出的测量结果" class="py-6">
         <template #extra>
           <n-space justify="center">
-            <n-button size="small" type="primary" @click="router.push('/recognition')">
-              去识别页测量
-            </n-button>
+            <n-button type="primary" @click="router.push('/recognition')"> 去识别页测量 </n-button>
             <n-upload
               accept=".json,application/json"
               :show-file-list="false"
               :default-upload="false"
               @change="handleFile"
             >
-              <n-button size="small" ghost>导入 JSON 导出</n-button>
+              <n-button ghost>导入 JSON 导出</n-button>
             </n-upload>
           </n-space>
         </template>
@@ -167,7 +166,7 @@ function exportHTML() {
           :default-upload="false"
           @change="handleFile"
         >
-          <n-button size="small" quaternary>切换为导入的 JSON…</n-button>
+          <n-button quaternary>切换为导入的 JSON…</n-button>
         </n-upload>
       </template>
     </n-card>

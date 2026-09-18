@@ -13,12 +13,15 @@ import {
   useMessage,
 } from 'naive-ui'
 import ResultTables from '@/components/ResultTables.vue'
-import { useHistoryStore } from '@/composables/useHistoryStore'
-import { useMeasureStore } from '@/composables/useMeasureStore'
+import { storeToRefs } from 'pinia'
+import { useHistoryStore } from '@/stores/history'
+import { useMeasureStore } from '@/stores/measure'
 
 // §8 历史页：2×2 方格 + 查看 / 删除 / 清空（记录见 useHistoryStore）
 const message = useMessage()
-const { records, remove, clear } = useHistoryStore()
+const historyStore = useHistoryStore()
+const { records } = storeToRefs(historyStore)
+const { remove, clear } = historyStore
 const { setSession } = useMeasureStore()
 
 const viewOpen = ref(false)
@@ -84,7 +87,7 @@ function clearAll() {
           @positive-click="clearAll"
         >
           <template #trigger>
-            <n-button size="small" type="error" ghost>
+            <n-button type="error" ghost>
               <template #icon><i class="i-carbon:trash-can" /></template>
               清空全部
             </n-button>
@@ -119,10 +122,10 @@ function clearAll() {
           <div class="truncate font-medium" :title="r.title">{{ r.title }}</div>
           <div class="text-xs opacity-60">{{ fmtDate(r.createdAt) }}</div>
           <n-space class="mt-auto" :size="8">
-            <n-button size="small" type="primary" ghost @click="view(r)">查看</n-button>
+            <n-button type="primary" ghost @click="view(r)">查看</n-button>
             <n-popconfirm positive-text="删除" negative-text="取消" @positive-click="removeOne(r)">
               <template #trigger>
-                <n-button size="small" type="error" ghost>删除</n-button>
+                <n-button type="error" ghost>删除</n-button>
               </template>
               删除这条历史记录？
             </n-popconfirm>

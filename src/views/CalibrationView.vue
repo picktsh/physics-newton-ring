@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { watchDebounced } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 import {
   NCard,
@@ -9,20 +10,39 @@ import {
   NSlider,
   NTag,
   NAlert,
-  NRadioGroup,
-  NRadioButton,
   NDivider,
   NEmpty,
+  NPopconfirm,
+  NDropdown,
+  NCollapseTransition,
   useMessage,
 } from 'naive-ui'
 import { solveGlobalTranslation, verifyOverlayOffset } from '@/utils/imageRegistrator'
-import { useMeasureStore } from '@/composables/useMeasureStore'
-import { CALIB_IMAGES_KEY, CALIB_POINTS_KEY } from '@/utils/constants'
+import { storeToRefs } from 'pinia'
+import { useMeasureStore } from '@/stores/measure'
+import { useImageLibrary } from '@/stores/imageLibrary'
+import ImageTray from '@/components/ImageTray.vue'
 
-// §8 标定页（对应旧 Tab1）：双图上传 → 圆形截取 → 叠加对齐 → 锁定取点 → 标定值 → 应用到识别
+// §8 标定页：图片库选图 A/B → 圆形截取 → 叠加对齐 → 锁定取点 → 标定值 → 应用到识别
 const message = useMessage()
 const router = useRouter()
-const { setPixelScale, setCalibImages } = useMeasureStore()
+const measureStore = useMeasureStore()
+const { calibSession, calibSelection } = storeToRefs(measureStore)
+const { setPixelScale, setCalibImages, clearCalibSession, clearCalibSelection } = measureStore
+const imageLibrary = useImageLibrary()
+const { images: libraryImages } = storeToRefs(imageLibrary)
+const {
+  loadLibrary,
+  findImage,
+  getObjectURL,
+  ensureObjectURL,
+  addFiles,
+  setRecordPair,
+  unpairRecord,
+  pairIdFor,
+  pairRecords,
+  normalizeAllPairs,
+} = imageLibrary
 
 // ===== 图片与刻度 =====
 const calibImageA = ref(null) // { src, name, width, height }
@@ -30,6 +50,13 @@ const calibImageB = ref(null)
 const calibScaleA = ref(null) // 图A鼓轮刻度 (mm)
 const calibScaleB = ref(null) // 图B鼓轮刻度 (mm)
 const calibDistanceManual = ref(null) // 手动实际距离 (mm)，优先于刻度差
+
+// 选择态（sessionStorage 独立键）：当前选中的标定组；与过程数据分离，「重置本页」不清
+const activePairId = computed(() => calibSelection.value?.pairId || '')
+const flowOpen = ref(false)
+const cropRect = ref(null) // 确认截取时的 { x0, y0, size } 快照；会话恢复据此重跑截取
+// 会话恢复 / 重置期间抑制图片变更 watcher 的状态清零与持久化（否则恢复值会被 watcher 冲掉）
+let suppress = false
 
 const calibAutoDistance = computed(() => {
   if (calibScaleA.value == null || calibScaleB.value == null) return 0
@@ -317,6 +344,7 @@ async function confirmCrop() {
     croppedOriginals.value = backup
     calibImageA.value = ca
     calibImageB.value = cb
+    cropRect.value = { x0, y0, size }
     cropCenter.value = null
     cropRadius.value = 0
     message.success(`已截取 ${size}×${size} 区域，请在叠加对齐卡片手动粗对齐`)
@@ -331,11 +359,16 @@ function restoreCrop() {
   calibImageA.value = croppedOriginals.value.A
   calibImageB.value = croppedOriginals.value.B
   croppedOriginals.value = null
+  cropRect.value = null
   message.info('已恢复原图')
 }
 
 // 图片更换：重置叠加/取点状态（截取备份 croppedOriginals 由 confirmCrop/restoreCrop 显式管理，不在此清）
 watch([calibImageA, calibImageB], () => {
+  if (suppress) {
+    setCalibImages(calibImageA.value, calibImageB.value)
+    return
+  }
   stopOverlayBlink()
   overlayDx.value = 0
   overlayDy.value = 0
@@ -347,50 +380,107 @@ watch([calibImageA, calibImageB], () => {
   checkCenters.value = null
   overlayLocked.value = false
   saveSession()
-  // 同步到内存单例，供识别页「导入图A/B」跨页读取（不受 sessionStorage 大图配额影响）
+  // 同步到内存单例，供识别页「导入图A/B」跨页读取
   setCalibImages(calibImageA.value, calibImageB.value)
 })
 
-// ===== 上传 =====
-function handleCalibUpload(slot, file) {
-  if (!file) return
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    const img = new Image()
-    img.onload = () => {
-      const data = {
-        src: e.target.result,
-        name: file.name,
-        width: img.naturalWidth,
-        height: img.naturalHeight,
-      }
-      if (slot === 'A') calibImageA.value = data
-      else calibImageB.value = data
-      calibPointPairs.value = []
-      croppedOriginals.value = null
-    }
-    img.src = e.target.result
+// ===== 取图（组卡模型：选择态 pairId 驱动槽位；库记录 pairId+slot 为单一数据源）=====
+// 槽对象结构 { id, src, name, width, height }：src 为 objectURL 不落盘，会话只存选择态与过程数据。
+function slotFromRecord(rec) {
+  return {
+    id: rec.id,
+    src: getObjectURL(rec.id),
+    name: rec.title || rec.name,
+    width: rec.width,
+    height: rec.height,
   }
-  reader.readAsDataURL(file)
 }
-function onPickSlot(slot, file) {
-  handleCalibUpload(slot, file)
+async function slotFromRecordAsync(rec) {
+  await ensureObjectURL(rec.id) // blob 可能尚未预热，slotFromRecord 的 src 依赖缓存就绪
+  return slotFromRecord(rec)
 }
-const pendingSlot = ref('A')
-const hiddenFileInput = ref(null)
-function chooseFile(slot) {
-  pendingSlot.value = slot
-  hiddenFileInput.value?.click()
-}
-function onHiddenChange(e) {
-  const f = e.target.files?.[0]
-  if (f) onPickSlot(pendingSlot.value, f)
-  e.target.value = ''
-}
-function removeImage(slot) {
-  if (slot === 'A') calibImageA.value = null
-  else calibImageB.value = null
+// 按当前选择态重建双槽；组构成变化使截取快照失效（截取 src 是过程派生数据）
+async function rebuildSlots() {
+  const pid = activePairId.value
+  const { a, b } = pid ? pairRecords(pid) : { a: null, b: null }
+  calibImageA.value = a ? await slotFromRecordAsync(a) : null
+  calibImageB.value = b ? await slotFromRecordAsync(b) : null
   croppedOriginals.value = null
+  cropRect.value = null
+  setCalibImages(calibImageA.value, calibImageB.value)
+  saveSession()
+}
+watch(activePairId, () => rebuildSlots())
+
+function onSelectPair(pid) {
+  if (activePairId.value !== pid) calibSelection.value = { pairId: pid }
+}
+// 示例标定对自带默认鼓轮刻度（SAMPLES_BUILTIN.scale）：仅用户显式赋槽时填充；
+// suppress 期间（会话恢复/重置）不覆盖——会话里存的是用户实测手改值，优先于示例默认值
+function fillSampleScale(slot, rec) {
+  if (rec?.scale != null && !suppress) setScale(slot === 'a' ? 'A' : 'B', rec.scale)
+}
+async function onSlotAssign({ pairId, slot, recId }) {
+  const rec = findImage(recId)
+  if (!rec) return
+  // 无目标组（占位新建/单张成组）→ groupId 由成员 imageId 派生；setRecordPair 返回规范 id（构成变化可能重派）
+  const target = pairId || pairIdFor(slot === 'a' ? recId : null, slot === 'b' ? recId : null)
+  const canonical = setRecordPair(recId, target, slot)
+  calibSelection.value = { pairId: canonical }
+  fillSampleScale(slot, rec)
+  await rebuildSlots()
+}
+async function onNewPair({ recId, slot }) {
+  await onSlotAssign({ pairId: null, slot, recId })
+}
+async function onGroupAssign(recs) {
+  const a = recs.find((r) => r.slot !== 'b')
+  const b = recs.find((r) => r.slot === 'b')
+  let canonical = null
+  if (a) canonical = setRecordPair(a.id, pairIdFor(a.id, null), 'a')
+  if (b) canonical = setRecordPair(b.id, canonical || pairIdFor(null, b.id), 'b')
+  if (!canonical) return
+  calibSelection.value = { pairId: canonical }
+  for (const r of recs) fillSampleScale(r.slot === 'b' ? 'b' : 'a', r)
+  await rebuildSlots()
+}
+// 退组：库改写 + 选择态 remap（剩余成员重派 groupId 后选择态跟随，避免误判「组被删」）
+function onUnpair(recId) {
+  const oldPid = findImage(recId)?.pairId
+  const restPid = unpairRecord(recId)
+  if (oldPid && restPid && calibSelection.value?.pairId === oldPid)
+    calibSelection.value = { pairId: restPid }
+}
+
+const hiddenFileInput = ref(null)
+const trayRef = ref(null)
+const pendingSlotTarget = ref(null) // 页面上传入口的落槽上下文 { pairId, slot }
+// 上传入口（PC/移动统一）：dropdown 二选一——本地文件 / 示例图库（组卡可「整组赋 A/B」）
+const uploadMenuOptions = [
+  { label: '本地文件…', key: 'file' },
+  { label: '从示例图库选择…', key: 'sample' },
+]
+// 卡①上传按钮的落槽目标：当前组；无组则传 null（onSlotAssign 按成员派生新组）
+function onSlotUploadMenu(key, slot) {
+  const t = { pairId: activePairId.value || null, slot: slot === 'A' ? 'a' : 'b' }
+  if (key === 'file') {
+    pendingSlotTarget.value = t
+    hiddenFileInput.value?.click()
+  } else trayRef.value?.openPicker(t)
+}
+async function onHiddenChange(e) {
+  const f = e.target.files?.[0]
+  e.target.value = ''
+  const target = pendingSlotTarget.value
+  pendingSlotTarget.value = null
+  if (!f) return
+  const [added] = await addFiles([f])
+  if (added && target) await onSlotAssign({ ...target, recId: added.id })
+}
+// 移除 = 退组（库记录回未配对）；libraryImages watcher 自动重建槽位
+function removeImage(slot) {
+  const rec = pairRecords(activePairId.value)[slot === 'A' ? 'a' : 'b']
+  if (rec) onUnpair(rec.id)
 }
 function setScale(slot, v) {
   if (slot === 'A') calibScaleA.value = v
@@ -725,63 +815,165 @@ function onCalibKeydown(e) {
   }
 }
 
-// ===== sessionStorage 缓存 =====
+// ===== sessionStorage 会话（v2：只存过程数据；图片组选择态另存 calibSelection；截取图不存，恢复时重跑 cropRect）=====
 function saveSession() {
-  try {
-    sessionStorage.setItem(
-      CALIB_IMAGES_KEY,
-      JSON.stringify({
-        imageA: calibImageA.value,
-        imageB: calibImageB.value,
-        scaleA: calibScaleA.value,
-        scaleB: calibScaleB.value,
-        distanceManual: calibDistanceManual.value,
-      }),
-    )
-  } catch {
-    try {
-      sessionStorage.setItem(
-        CALIB_IMAGES_KEY,
-        JSON.stringify({
-          imageA: null,
-          imageB: null,
-          scaleA: calibScaleA.value,
-          scaleB: calibScaleB.value,
-          distanceManual: calibDistanceManual.value,
-        }),
-      )
-    } catch {
-      /* 配额不足，忽略 */
-    }
-  }
-  try {
-    sessionStorage.setItem(CALIB_POINTS_KEY, JSON.stringify(calibPointPairs.value))
-  } catch {
-    /* 忽略 */
+  if (suppress) return
+  calibSession.value = {
+    version: 2,
+    scaleA: calibScaleA.value,
+    scaleB: calibScaleB.value,
+    distanceManual: calibDistanceManual.value,
+    cropCenter: cropCenter.value,
+    cropRadius: cropRadius.value,
+    overlayDx: overlayDx.value,
+    overlayDy: overlayDy.value,
+    overlayLocked: overlayLocked.value,
+    blendMode: overlayBlendMode.value,
+    pointPairs: calibPointPairs.value,
+    cropRect: cropRect.value,
   }
 }
-function loadSession() {
-  try {
-    const raw = sessionStorage.getItem(CALIB_IMAGES_KEY)
-    if (raw) {
-      const d = JSON.parse(raw)
-      calibImageA.value = d.imageA || null
-      calibImageB.value = d.imageB || null
-      calibScaleA.value = d.scaleA ?? null
-      calibScaleB.value = d.scaleB ?? null
-      calibDistanceManual.value = d.distanceManual ?? null
-    }
-    const rp = sessionStorage.getItem(CALIB_POINTS_KEY)
-    if (rp) calibPointPairs.value = JSON.parse(rp) || []
-  } catch {
-    /* 忽略 */
-  }
-}
-watch([calibScaleA, calibScaleB, calibDistanceManual, calibPointPairs], saveSession, { deep: true })
 
-onMounted(() => {
+// v1 会话以 imageAId/imageBId 锚定图片：就地建组（groupId 由成员派生）写入选择态，会话降级为 v2（过程数据保留）
+function migrateV1Session() {
+  const s = calibSession.value
+  if (!s || s.version !== 1) return
+  const recA = s.imageAId ? findImage(s.imageAId) : null
+  const recB = s.imageBId ? findImage(s.imageBId) : null
+  if (recA || recB) {
+    let pid = null
+    if (recA) pid = setRecordPair(recA.id, pairIdFor(recA.id, null), 'a')
+    if (recB) pid = setRecordPair(recB.id, pid || pairIdFor(null, recB.id), 'b')
+    calibSelection.value = { pairId: pid }
+  }
+  const next = { ...s, version: 2 }
+  delete next.imageAId
+  delete next.imageBId
+  calibSession.value = next
+}
+
+async function restoreSession() {
+  await loadLibrary()
+  // 存量旧随机 UUID 组一次性重命名到派生 groupId；选择态按 remap 跟随，避免误判「组被删」
+  const remap = normalizeAllPairs()
+  if (calibSelection.value && remap.has(calibSelection.value.pairId))
+    calibSelection.value = { pairId: remap.get(calibSelection.value.pairId) }
+  migrateV1Session()
+  const s = calibSession.value
+  const pid = activePairId.value
+  const { a, b } = pid ? pairRecords(pid) : { a: null, b: null }
+  if (pid && !a && !b) {
+    clearCalibSelection()
+    clearCalibSession()
+    message.warning('选择中的图片组已从图库删除，会话已清除')
+    return
+  }
+  suppress = true
+  try {
+    if (a) calibImageA.value = await slotFromRecordAsync(a)
+    if (b) calibImageB.value = await slotFromRecordAsync(b)
+    if (s && s.version === 2) {
+      calibScaleA.value = s.scaleA ?? null
+      calibScaleB.value = s.scaleB ?? null
+      calibDistanceManual.value = s.distanceManual ?? null
+      if (s.cropCenter) cropCenter.value = s.cropCenter
+      if (s.cropRadius) cropRadius.value = s.cropRadius
+      overlayBlendMode.value = s.blendMode || 'overlay'
+      calibPointPairs.value = Array.isArray(s.pointPairs) ? s.pointPairs : []
+      if (s.cropRect && calibImageA.value && calibImageB.value) {
+        // 重跑截取：cropSquare 为确定性计算，复用既有函数不改算法
+        const { x0, y0, size } = s.cropRect
+        const backup = { A: calibImageA.value, B: calibImageB.value }
+        try {
+          const [ca, cb] = await Promise.all([
+            cropSquare(calibImageA.value, x0, y0, size),
+            cropSquare(calibImageB.value, x0, y0, size),
+          ])
+          croppedOriginals.value = backup
+          calibImageA.value = { ...ca, id: backup.A.id }
+          calibImageB.value = { ...cb, id: backup.B.id }
+          cropRect.value = { x0, y0, size }
+        } catch {
+          cropRect.value = null
+        }
+      }
+      overlayDx.value = s.overlayDx || 0
+      overlayDy.value = s.overlayDy || 0
+      overlayLocked.value = !!s.overlayLocked
+    }
+  } finally {
+    suppress = false
+  }
+  setCalibImages(calibImageA.value, calibImageB.value)
+  saveSession()
+  if (a || b || s) showRestored()
+}
+function showRestored() {
+  message.success('📂 已恢复上次标定会话')
+}
+
+// 「重置本页」：只清过程数据（刻度/取点/对齐/截取），保留选择态与槽位图；图片库不动
+async function resetPage() {
+  suppress = true
+  stopOverlayBlink()
+  calibScaleA.value = null
+  calibScaleB.value = null
+  calibDistanceManual.value = null
+  cropCenter.value = null
+  cropRadius.value = 0
+  overlayDx.value = 0
+  overlayDy.value = 0
+  overlayLocked.value = false
+  overlayFineMsg.value = ''
+  overlayFineDone.value = false
+  checkCenters.value = null
+  calibPointPairs.value = []
+  await rebuildSlots() // 槽位回组内原图（顺带清截取快照）
+  clearCalibSession()
+  await nextTick()
+  suppress = false
+  message.success('🧹 已重置本页过程数据（图片组选择保留）')
+}
+
+// 过程数据全量覆盖：会话字段变更防抖写 sessionStorage（拖滑块/取点等高频变更不逐帧写）
+watchDebounced(
+  [
+    calibScaleA,
+    calibScaleB,
+    calibDistanceManual,
+    calibPointPairs,
+    cropCenter,
+    cropRadius,
+    overlayDx,
+    overlayDy,
+    overlayLocked,
+    overlayBlendMode,
+  ],
+  saveSession,
+  { deep: true, debounce: 250 },
+)
+
+// 库变化（退组/删图/赋槽）→ 选择态组构成变了才重建槽位；组被删空 → 清选择与会话
+watch(libraryImages, async () => {
+  const pid = activePairId.value
+  if (!pid) return
+  const { a, b } = pairRecords(pid)
+  if (!a && !b) {
+    clearCalibSelection()
+    clearCalibSession()
+    await rebuildSlots()
+    message.warning('选择中的图片组已从图库删除，会话已清除')
+    return
+  }
+  const changed =
+    (a?.id || '') !== (calibImageA.value?.id || '') ||
+    (b?.id || '') !== (calibImageB.value?.id || '')
+  if (changed) await rebuildSlots()
+})
+
+onMounted(async () => {
   document.addEventListener('keydown', onCalibKeydown)
-  loadSession()
+  await restoreSession()
   nextTick(() => {
     if (overlayReady.value) drawOverlayCanvas()
   })
@@ -794,22 +986,52 @@ onUnmounted(() => {
 
 <template>
   <div class="flex max-w-6xl flex-col gap-4">
-    <!-- 操作说明 -->
+    <!-- 顶部图片管理区：组卡布局（A/B 双框+缺图占位）；点卡选组，点占位/已填框换图 -->
+    <ImageTray
+      ref="trayRef"
+      assign-mode
+      :active-pair="activePairId"
+      @select-pair="onSelectPair"
+      @slot-assign="onSlotAssign"
+      @new-pair="onNewPair"
+      @group-assign="onGroupAssign"
+      @unpair="onUnpair"
+    />
+
+    <!-- 操作说明（可折叠，默认展开；收起省页面高度） -->
     <n-card :bordered="false" class="bg-card" title="像素标定 · 操作流程">
-      <ol class="list-decimal space-y-1 pl-5 text-sm opacity-75">
-        <li>上传同一机位、鼓轮两个刻度下拍摄的图A / 图B（须同尺寸）。</li>
-        <li>可选：在图A上框选圆形区域截取（同坐标同步应用到图B），排除边缘干扰。</li>
-        <li>
-          叠加对齐：拖 Δx/Δy
-          滑块或方向键粗对齐，可「闪烁对比」看错位跳动；或「自动全局对齐」一键求解，再「检查对齐」复核残差。
-        </li>
-        <li>点「确定对齐」锁定，然后在叠加画面上点击取点（可多组）。</li>
-        <li>输入鼓轮刻度或实际移动距离，得到标定值（mm/像素），点「应用到识别」。</li>
-      </ol>
+      <template #header-extra>
+        <n-button type="primary" secondary @click="flowOpen = !flowOpen">
+          <template #icon>
+            <i :class="flowOpen ? 'i-carbon:chevron-up' : 'i-carbon:chevron-down'" />
+          </template>
+          {{ flowOpen ? '收起流程' : '展开流程' }}
+        </n-button>
+      </template>
+      <n-collapse-transition :show="flowOpen">
+        <ol class="list-decimal space-y-1 pl-5 text-sm opacity-75">
+          <li>上传同一机位、鼓轮两个刻度下拍摄的图A / 图B（须同尺寸）。</li>
+          <li>可选：在图A上框选圆形区域截取（同坐标同步应用到图B），排除边缘干扰。</li>
+          <li>
+            叠加对齐：拖 Δx/Δy
+            滑块或方向键粗对齐，可「闪烁对比」看错位跳动；或「自动全局对齐」一键求解，再「检查对齐」复核残差。
+          </li>
+          <li>点「确定对齐」锁定，然后在叠加画面上点击取点（可多组）。</li>
+          <li>输入鼓轮刻度或实际移动距离，得到标定值（mm/像素），点「应用到识别」。</li>
+        </ol>
+      </n-collapse-transition>
     </n-card>
 
     <!-- 上传 + 刻度 -->
     <n-card :bordered="false" class="bg-card" title="① 图像与鼓轮刻度">
+      <template #header-extra>
+        <n-popconfirm @positive-click="resetPage">
+          <template #trigger>
+            <n-button type="warning" secondary>重置本页</n-button>
+          </template>
+          清除本页过程数据（刻度/取点/对齐/截取；图片组选择与图库保留），确认？
+        </n-popconfirm>
+      </template>
       <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <input
           ref="hiddenFileInput"
@@ -821,10 +1043,11 @@ onUnmounted(() => {
         <div v-for="slot in ['A', 'B']" :key="slot" class="flex flex-col gap-2">
           <n-space align="center" :size="8">
             <span class="font-medium">图{{ slot }}</span>
-            <n-button size="small" @click="chooseFile(slot)">上传图{{ slot }}</n-button>
+            <n-dropdown :options="uploadMenuOptions" @select="(key) => onSlotUploadMenu(key, slot)">
+              <n-button type="primary">上传入库并设为图{{ slot }}…</n-button>
+            </n-dropdown>
             <n-button
               v-if="slot === 'A' ? calibImageA : calibImageB"
-              size="small"
               quaternary
               type="error"
               @click="removeImage(slot)"
@@ -845,7 +1068,6 @@ onUnmounted(() => {
             <span class="text-xs opacity-60">鼓轮刻度 (mm)</span>
             <n-input-number
               :value="slot === 'A' ? calibScaleA : calibScaleB"
-              size="small"
               :step="0.01"
               class="!w-32"
               placeholder="如 12.345"
@@ -858,12 +1080,7 @@ onUnmounted(() => {
       <n-space align="center" wrap :size="16">
         <n-space align="center" :size="8">
           <span class="text-sm">实际移动距离 (mm)</span>
-          <n-input-number
-            v-model:value="calibDistanceManual"
-            size="small"
-            :step="0.001"
-            class="!w-36"
-          />
+          <n-input-number v-model:value="calibDistanceManual" :step="0.001" class="!w-36" />
         </n-space>
         <n-tag :bordered="false" round>刻度差自动值：{{ calibAutoDistance.toFixed(3) }} mm</n-tag>
         <n-tag type="info" :bordered="false" round
@@ -886,7 +1103,7 @@ onUnmounted(() => {
         <p class="text-sm opacity-70">
           当前为截取后的 {{ calibImageA.width }}×{{ calibImageA.height }} 区域。
         </p>
-        <n-button size="small" @click="restoreCrop">重新裁剪（恢复原图）</n-button>
+        <n-button @click="restoreCrop">重新裁剪（恢复原图）</n-button>
       </div>
       <div v-else class="flex flex-col items-center gap-3">
         <div ref="cropStageRef" class="relative inline-block max-w-full select-none" tabindex="0">
@@ -912,9 +1129,9 @@ onUnmounted(() => {
           />
         </div>
         <n-space align="center" :size="8">
-          <n-button size="small" @click="adjustCropRadius(-10)">半径 −</n-button>
-          <n-button size="small" @click="adjustCropRadius(10)">半径 +</n-button>
-          <n-button size="small" type="primary" :loading="cropBusy" @click="confirmCrop"
+          <n-button @click="adjustCropRadius(-10)">半径 −</n-button>
+          <n-button @click="adjustCropRadius(10)">半径 +</n-button>
+          <n-button type="primary" :loading="cropBusy" @click="confirmCrop"
             >确认截取（两图同步）</n-button
           >
         </n-space>
@@ -985,26 +1202,15 @@ onUnmounted(() => {
         </div>
 
         <n-space wrap :size="8">
-          <n-button size="small" :disabled="overlayLocked" @click="shiftOverlayBy(-1, 0)"
-            >← 左移</n-button
-          >
-          <n-button size="small" :disabled="overlayLocked" @click="shiftOverlayBy(1, 0)"
-            >右移 →</n-button
-          >
-          <n-button size="small" :disabled="overlayLocked" @click="shiftOverlayBy(0, -1)"
-            >↑ 上移</n-button
-          >
-          <n-button size="small" :disabled="overlayLocked" @click="shiftOverlayBy(0, 1)"
-            >下移 ↓</n-button
-          >
-          <n-button size="small" :disabled="overlayLocked" @click="resetOverlayShift"
-            >复位</n-button
-          >
-          <n-button size="small" :disabled="overlayLocked" @click="toggleOverlayBlink">
+          <n-button :disabled="overlayLocked" @click="shiftOverlayBy(-1, 0)">← 左移</n-button>
+          <n-button :disabled="overlayLocked" @click="shiftOverlayBy(1, 0)">右移 →</n-button>
+          <n-button :disabled="overlayLocked" @click="shiftOverlayBy(0, -1)">↑ 上移</n-button>
+          <n-button :disabled="overlayLocked" @click="shiftOverlayBy(0, 1)">下移 ↓</n-button>
+          <n-button :disabled="overlayLocked" @click="resetOverlayShift">复位</n-button>
+          <n-button :disabled="overlayLocked" @click="toggleOverlayBlink">
             {{ overlayBlinkOn ? '停止闪烁' : '闪烁对比' }}
           </n-button>
           <n-button
-            size="small"
             type="info"
             :loading="overlayFineBusy"
             :disabled="overlayLocked"
@@ -1012,14 +1218,8 @@ onUnmounted(() => {
           >
             自动全局对齐
           </n-button>
-          <n-button size="small" :loading="overlayCheckBusy" @click="runOverlayCheck">
-            检查对齐
-          </n-button>
-          <n-button
-            size="small"
-            :type="overlayLocked ? 'warning' : 'primary'"
-            @click="toggleOverlayLock"
-          >
+          <n-button :loading="overlayCheckBusy" @click="runOverlayCheck"> 检查对齐 </n-button>
+          <n-button :type="overlayLocked ? 'warning' : 'primary'" @click="toggleOverlayLock">
             {{ overlayLocked ? '🔓 解锁对齐' : '🔒 确定对齐' }}
           </n-button>
         </n-space>
@@ -1052,9 +1252,7 @@ onUnmounted(() => {
     <!-- 特征点 + 标定值 -->
     <n-card v-if="overlayReady" :bordered="false" class="bg-card" title="④ 特征点与标定值">
       <template #header-extra>
-        <n-button v-if="calibPointPairs.length" size="small" quaternary @click="clearPairs"
-          >清空取点</n-button
-        >
+        <n-button v-if="calibPointPairs.length" quaternary @click="clearPairs">清空取点</n-button>
       </template>
       <n-empty
         v-if="!calibPointPairs.length"
@@ -1097,9 +1295,7 @@ onUnmounted(() => {
                 {{ row.value ? row.value.toFixed(4) : '—' }}
               </td>
               <td class="border border-gray-400/30 px-2 py-1 text-center">
-                <n-button size="tiny" quaternary type="error" @click="removePair(row.id)"
-                  >删除</n-button
-                >
+                <n-button quaternary type="error" @click="removePair(row.id)">删除</n-button>
               </td>
             </tr>
           </tbody>

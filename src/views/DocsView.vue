@@ -1,18 +1,10 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useDropZone } from '@vueuse/core'
-import {
-  NAlert,
-  NButton,
-  NDropdown,
-  NSpace,
-  NSpin,
-  NTabs,
-  NTabPane,
-  useMessage,
-} from 'naive-ui'
+import { NAlert, NButton, NDropdown, NSpace, NSpin, NTabs, NTabPane, useMessage } from 'naive-ui'
 import { DOCS_BUILTIN, DOCS_ZIP_MAX_BYTES } from '@/utils/constants'
-import { useDocsStore } from '@/composables/useDocsStore'
+import { storeToRefs } from 'pinia'
+import { useDocsStore } from '@/stores/docs'
 import { renderMarkdown } from '@/utils/markdownRenderer'
 import { runMermaid } from '@/utils/mermaidRunner'
 import { exportMd, exportDoc, exportPng, printDoc, openInNewWindow } from '@/utils/docsExport'
@@ -22,8 +14,9 @@ import { exportMd, exportDoc, exportPng, printDoc, openInNewWindow } from '@/uti
 // pdf / 图片走新窗口原生预览；zip 展开多 md tab + 相对图片 objectURL。详见 CHANGELOG [未发布]。
 
 const message = useMessage()
-const { localTabs, activeKey, loadBuiltins, addLocalFile, addZipFile, closeTab, getTabContext } =
-  useDocsStore()
+const docsStore = useDocsStore()
+const { localTabs, activeKey } = storeToRefs(docsStore)
+const { loadBuiltins, addLocalFile, addZipFile, closeTab, getTabContext } = docsStore
 
 const rootRef = ref(null)
 const fileInputRef = ref(null)
@@ -96,7 +89,7 @@ function bindImgWatchers() {
       () => {
         imgErrorCount.value++
       },
-      { once: true }
+      { once: true },
     )
     if (img.complete && img.naturalWidth === 0 && img.src) imgErrorCount.value++
   })
@@ -169,7 +162,9 @@ async function processFiles(fileList) {
           }
         } else if (kind === 'zip') {
           if (f.size > DOCS_ZIP_MAX_BYTES) {
-            message.warning(`压缩包 ${f.name} 过大（${(f.size / 1024 / 1024).toFixed(1)} MB），已跳过`)
+            message.warning(
+              `压缩包 ${f.name} 过大（${(f.size / 1024 / 1024).toFixed(1)} MB），已跳过`,
+            )
             ignored++
             continue
           }
@@ -249,12 +244,7 @@ async function onExportSelect(key) {
       @add="triggerFileInput"
       @remove="onTabRemove"
     >
-      <n-tab-pane
-        v-for="t in allTabs"
-        :key="t.key"
-        :name="t.key"
-        :closable="!t.isBuiltin"
-      >
+      <n-tab-pane v-for="t in allTabs" :key="t.key" :name="t.key" :closable="!t.isBuiltin">
         <template #tab>{{ t.title }}</template>
       </n-tab-pane>
     </n-tabs>
@@ -262,7 +252,7 @@ async function onExportSelect(key) {
     <!-- 工具条：导入 + 导出（NDropdown 收拢） -->
     <n-space justify="space-between" align="center" :wrap="true">
       <n-space :size="8" align="center" :wrap="true">
-        <n-button size="small" @click="triggerFileInput">
+        <n-button @click="triggerFileInput">
           <template #icon><i class="i-carbon-document-add" /></template>
           打开本地 .md / .zip
         </n-button>
@@ -276,7 +266,7 @@ async function onExportSelect(key) {
         :disabled="!activeContext.content"
         @select="onExportSelect"
       >
-        <n-button size="small" type="primary" :disabled="!activeContext.content">
+        <n-button type="primary" :disabled="!activeContext.content">
           <template #icon><i class="i-carbon-export" /></template>
           导出
           <i class="i-carbon-chevron-down ml-1" />
@@ -292,7 +282,9 @@ async function onExportSelect(key) {
       加载失败：{{ activeContext.error }}
     </n-alert>
     <n-alert v-else-if="activeContext.transient" type="info" :bordered="false" size="small">
-      ⚠ 本文档{{ activeContext.source === 'zip' ? '来自压缩包' : '较大' }}，未纳入会话暂存，刷新页面后需重新拖入。
+      ⚠ 本文档{{
+        activeContext.source === 'zip' ? '来自压缩包' : '较大'
+      }}，未纳入会话暂存，刷新页面后需重新拖入。
     </n-alert>
     <n-alert
       v-else-if="imgErrorCount > 0 && !imgAlertDismissed.has(activeKey)"
@@ -302,8 +294,8 @@ async function onExportSelect(key) {
       closable
       @close="dismissImgAlert"
     >
-      本文档有 {{ imgErrorCount }} 张相对路径图片未能加载（浏览器安全限制）。建议把图片与 md 一起打包为 .zip
-      重新拖入，或改用绝对 URL / data URI。
+      本文档有 {{ imgErrorCount }} 张相对路径图片未能加载（浏览器安全限制）。建议把图片与 md
+      一起打包为 .zip 重新拖入，或改用绝对 URL / data URI。
     </n-alert>
 
     <!-- 主体：文档正文 + 右侧 TOC -->

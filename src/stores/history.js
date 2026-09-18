@@ -1,19 +1,20 @@
+import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
 import { HISTORY_KEY, HISTORY_MAX } from '@/utils/constants'
 import { compressImageDataUrl } from '@/utils/imageCompress'
 
 // §7 历史记录单条：{ id, title, image(dataURL), createdAt, data }
 // 识别 / 历史 / 数据展示三页共享同一响应式数据源（§7）。
-const records = useStorage(HISTORY_KEY, [])
+export const useHistoryStore = defineStore('history', () => {
+  const records = useStorage(HISTORY_KEY, [])
 
-function trim() {
-  // LRU：保留最新 HISTORY_MAX 条，淘汰最旧（§11.5#6）
-  if (records.value.length > HISTORY_MAX) {
-    records.value = records.value.slice(0, HISTORY_MAX)
+  function trim() {
+    // LRU：保留最新 HISTORY_MAX 条，淘汰最旧（§11.5#6）
+    if (records.value.length > HISTORY_MAX) {
+      records.value = records.value.slice(0, HISTORY_MAX)
+    }
   }
-}
 
-export function useHistoryStore() {
   async function add({ title, image, data = null }) {
     const compressed = image ? await compressImageDataUrl(image) : image
     const record = {
@@ -48,4 +49,4 @@ export function useHistoryStore() {
   }
 
   return { records, add, update, remove, clear, get }
-}
+})

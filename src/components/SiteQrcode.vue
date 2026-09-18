@@ -20,6 +20,6 @@ const iconSrc = `${import.meta.env.BASE_URL}favicon.svg`
         type="svg"
       />
     </div>
-    <span class="text-xs opacity-60">手机扫码查看</span>
+    <span class="truncate text-xs opacity-60">手机扫码查看</span>
   </div>
 </template>

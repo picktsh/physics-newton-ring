@@ -23,7 +23,7 @@ const logoSrc = `${import.meta.env.BASE_URL}favicon.svg`
     <n-button quaternary circle class="mr-2" @click="emit('toggle-menu')">
       <i class="i-carbon:menu text-lg" />
     </n-button>
-    <img :src="logoSrc" alt="logo" class="h-6 w-6 shrink-0" />
+    <img :src="logoSrc" alt="logo" class="h-8 w-8 shrink-0" />
     <!-- 主标题 + 副标题两行；min-w-0 让 truncate 在 flex 子项内生效 -->
     <div class="ml-2 flex min-w-0 flex-col justify-center leading-tight">
       <span class="truncate text-xl font-semibold text-primary">牛顿环数字化智能测量系统</span>

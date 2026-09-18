@@ -108,16 +108,28 @@ function resetView() {
       draw()
     })
   } else {
-    scale.value = scaleMin.value
-    nextTick(() => {
-      const el = scrollRef.value
-      if (el) {
-        el.scrollLeft = 0
-        el.scrollTop = 0
-      }
-      draw()
-    })
+    fitWidth()
   }
+}
+
+// 快捷缩放：适应宽度（默认初始态）/ 原始尺寸 1:1
+function setScaleAndResetScroll(target) {
+  scale.value = Math.max(scaleMin.value, Math.min(MAX_SCALE, target))
+  nextTick(() => {
+    const el = scrollRef.value
+    if (el) {
+      el.scrollLeft = 0
+      el.scrollTop = 0
+    }
+    draw()
+  })
+}
+function fitWidth() {
+  if (!props.width || !viewport.value.w) return
+  setScaleAndResetScroll(viewport.value.w / props.width)
+}
+function fitOriginal() {
+  setScaleAndResetScroll(1)
 }
 
 function zoomIn() {
@@ -178,7 +190,14 @@ function onMouseDown(event) {
   }
   // Pan mode
   event.preventDefault()
-  panState = { mode: 'pan', sx: event.clientX, sy: event.clientY, sl: el.scrollLeft, st: el.scrollTop, moved: false }
+  panState = {
+    mode: 'pan',
+    sx: event.clientX,
+    sy: event.clientY,
+    sl: el.scrollLeft,
+    st: el.scrollTop,
+    moved: false,
+  }
   panning.value = true
   document.addEventListener('mousemove', onPanMove)
   document.addEventListener('mouseup', onPanEnd)
@@ -289,11 +308,20 @@ function onKeydown(e) {
   let dx = 0
   let dy = 0
   switch (e.key) {
-    case 'ArrowUp': dy = -V.h * step; break
-    case 'ArrowDown': dy = V.h * step; break
-    case 'ArrowLeft': dx = -V.w * step; break
-    case 'ArrowRight': dx = V.w * step; break
-    default: return
+    case 'ArrowUp':
+      dy = -V.h * step
+      break
+    case 'ArrowDown':
+      dy = V.h * step
+      break
+    case 'ArrowLeft':
+      dx = -V.w * step
+      break
+    case 'ArrowRight':
+      dx = V.w * step
+      break
+    default:
+      return
   }
   e.preventDefault()
   el.scrollLeft += dx
@@ -317,7 +345,14 @@ function draw() {
   if (!props.src) return
 
   const scroll = getScroll()
-  ctx.setTransform(scale.value * dpr, 0, 0, scale.value * dpr, -scroll.left * dpr, -scroll.top * dpr)
+  ctx.setTransform(
+    scale.value * dpr,
+    0,
+    0,
+    scale.value * dpr,
+    -scroll.left * dpr,
+    -scroll.top * dpr,
+  )
   const unit = 1 / scale.value
 
   if (props.rings.length > 0) {
@@ -451,7 +486,7 @@ watch(
   },
 )
 
-defineExpose({ resetView, zoomIn, zoomOut, draw })
+defineExpose({ resetView, zoomIn, zoomOut, fitWidth, fitOriginal, draw })
 </script>
 
 <template>
@@ -460,24 +495,22 @@ defineExpose({ resetView, zoomIn, zoomOut, draw })
     <div
       class="flex shrink-0 items-center gap-1.5 border-b border-gray-500/20 bg-black/40 px-2 py-1 text-xs text-white/90"
     >
-      <n-button size="tiny" quaternary :disabled="scale <= scaleMin + 0.001" @click="zoomOut">
+      <n-button quaternary :disabled="scale <= scaleMin + 0.001" @click="zoomOut">
         <template #icon><i class="i-carbon:zoom-out" /></template>
       </n-button>
       <span class="min-w-14 text-center font-mono opacity-80">{{ scale.toFixed(2) }}x</span>
-      <n-button size="tiny" quaternary :disabled="scale >= MAX_SCALE - 0.001" @click="zoomIn">
+      <n-button quaternary :disabled="scale >= MAX_SCALE - 0.001" @click="zoomIn">
         <template #icon><i class="i-carbon:zoom-in" /></template>
       </n-button>
-      <n-button size="tiny" quaternary @click="resetView">
+      <n-button quaternary @click="resetView">
         <template #icon><i class="i-carbon:reset" /></template>
       </n-button>
+      <n-button quaternary title="适应屏幕宽度" @click="fitWidth">适应宽度</n-button>
+      <n-button quaternary title="原始尺寸 1:1" @click="fitOriginal">原始尺寸</n-button>
 
       <div class="mx-1 h-4 w-px bg-white/20" />
 
-      <n-switch
-        :value="grayscale"
-        size="small"
-        @update:value="(v) => emit('update:grayscale', v)"
-      >
+      <n-switch :value="grayscale" size="small" @update:value="(v) => emit('update:grayscale', v)">
         <template #checked>灰度</template>
         <template #unchecked>彩色</template>
       </n-switch>
@@ -488,7 +521,7 @@ defineExpose({ resetView, zoomIn, zoomOut, draw })
         ({{ cursor.x.toFixed(0) }}, {{ cursor.y.toFixed(0) }}) · r={{ cursor.r.toFixed(1) }}px
       </span>
 
-      <n-button v-if="fullscreen" size="tiny" quaternary class="!text-white/80" @click="emit('close')">
+      <n-button v-if="fullscreen" quaternary class="!text-white/80" @click="emit('close')">
         <template #icon><i class="i-carbon:close" /></template>
         ESC
       </n-button>
@@ -515,7 +548,7 @@ defineExpose({ resetView, zoomIn, zoomOut, draw })
         />
       </div>
       <div v-else class="flex h-full min-h-30 items-center justify-center text-sm text-white/30">
-        请先上传牛顿环图像
+        请先在上方图片库选择或拖入牛顿环图像
       </div>
       <canvas ref="canvasRef" class="pointer-events-none absolute inset-0" />
     </div>

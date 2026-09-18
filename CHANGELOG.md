@@ -5,6 +5,16 @@
 
 ## [未发布]
 
+### Added / Changed / Fixed（2026-09-18 图片库与会话持久化重构 → 状态层 Pinia 化，一至六轮合并）
+
+- **图片库 IndexedDB 化**：`stores/imageLibrary` meta/blob 分键（`nr:images-meta` + 每图一键 `nr:blob:<id>`，官方 `useIDBKeyval` + `idb-keyval`，旧单键数据首载自动拆分迁移）；原图不压缩直存、objectURL 统一缓存删除时 revoke；顶部 `ImageTray` 图片条（拖入入库 / 点选 / 清空 / 单图删除，IDB 不可用降级仅内存并提示）；示例素材迁 `public/samples/`、`SAMPLES_BUILTIN` 单一数据源；新增 `SamplePicker` 示例选择器，示例与上传图分离（预览直读 public 路径、选中才幂等入库、可整组赋 A/B 带默认鼓轮刻度）。
+- **会话持久化与刷新恢复**：识别页 imageSession / 标定页 calibSession 过程数据全量防抖写（截取图不存、恢复时确定性重跑 cropSquare）；两页「重置本页」只清过程数据；选择态独立键 `rec-selection {imageId}` / `calib-selection {pairId}`（刷新/切页恢复、关 tab 自清，旧键 `calib-images` / `calib-points` 同步移除）；换选即旧过程会话作废。
+- **标定页组卡化 + 内容寻址**：记录新增 `pairId`（同 pairId + slot a/b = 一组），assignMode 按组渲染组卡（A/B 双框 + 缺图虚线占位 + 点击处来源菜单 + × 退组，落槽交互由 radio 改点击处菜单）；imageId 改 SHA-256 内容寻址（同图同 id 幂等入库），groupId 由成员 imageId 组合派生（`pairIdFor`，同一组合重建后组不变、旧会话可再锚定）。
+- **三个「刷新不恢复」根因修复**：① `loadLibrary` 改 promise 单例（布尔守卫竞态在空库上误判「原图已删」清会话）；② 识别页恢复锚点回退 `recSelection.imageId → saved.imageId`；③ **sessionStorage `[object Object]` 根因**——`useStorage` 按默认值类型推断序列化器，默认 `null` 落 `'any'`（`write = String(v)`），对象键自引入起即写坏，为历次「刷新不恢复」共同根因；四键显式传 JSON serializer + 模块加载一次性清理残留（残留信息不可恢复，当前会话需重做一遍）。
+- **状态层 Pinia 化**（推翻「暂不引 Pinia」旧决策，用户拍板）：`src/stores/` 四个 setup store（measure / imageLibrary / history / docs），旧模块级单例 composable 删除，约 12 处消费点迁移（state 经 `storeToRefs`、actions 从 store 解构）；useMenu / useTheme 保留 composable；`main.js` 挂 `createPinia()`；新增运行时依赖 `pinia`。
+- **交互与 UI**：识别视图工具栏新增「适应宽度 / 原始尺寸」（默认适应宽度）；标定页操作流程卡可折叠；缩略图角标实底白背景、删除钮常显（触屏可点）；识别页上传入口恢复按钮（移动端必需）。
+- **关键取舍与 Fixed**：IDB 封装手写改官方（二轮推翻一轮）；原图不压缩（标定像素口径）；OpenCV 红线（算法层零改动）；修复图片库误报「IndexedDB 不可用」（响应式 Proxy 过 structured clone 抛 DataCloneError，入库前 toRaw）；回滚 `public/docs/` 越权上移。
+
 ### Changed / Fixed（2026-09-18 锁屏密码输入优化）
 
 - **手机端唤起纯数字键盘**：`AccessLock` 输入框透传 `inputmode="numeric"` + `autocomplete="one-time-code"`（OTP 口径），保留 password 掩码。
@@ -21,7 +31,8 @@
 6. LoadingScreen 接线待定（当前用按钮 loading 态代替遮罩）。
 7. 若要消除 OpenCV wasm 实例化瞬间的主线程冻结 → 评估迁移 Web Worker。
 8. 识别页牛顿环图拖入缺「松手提示」遮罩（与文档中心 Drop 交互对齐）。
-9. 存储层容量：识别页大量图片 base64 可能顶爆 localStorage（~5 MB）→ 后续评估迁移 IndexedDB（可考虑 `@vueuse/core` 的 `useIDBKeyval`），跨页状态一并评估是否上 Pinia。
+9. 存储层容量：历史记录 base64 仍可能顶爆 localStorage（~5 MB）→ 后续评估（图片库已迁 IndexedDB、跨页状态已六轮上 Pinia）。
+10. 死代码清理：`interactionHandler.initDragDrop`（页面级拖入被图片条取代后已无引用）。
 
 ### 口径待定稿
 

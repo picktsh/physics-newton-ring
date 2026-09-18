@@ -12,7 +12,7 @@
 
 ## 状态与存储
 
-- 暂不引 Pinia（后续可能评估引入）：跨页状态 = 模块级单例 ref（`useMeasureStore` / `useHistoryStore`）。
+- 状态管理 = Pinia setup store
 - 存储 key 统一加项目前缀，常量收敛在 `utils/constants.js`（单一来源）。
 - 图片/历史治理：存入前压缩（最长边 1600 + JPEG 0.85）、上限 20 条 LRU；session 快照不落盘。
 

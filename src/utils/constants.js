@@ -17,9 +17,17 @@ export const WATERMARK_KEY = `${STORAGE_PREFIX}watermark`
 export const PIXEL_SCALE_KEY = `${STORAGE_PREFIX}pixel-scale`
 // 识别页图像会话 (sessionStorage，不压缩，刷新不丢、关 tab 自动清理)
 export const IMAGE_SESSION_KEY = `${STORAGE_PREFIX}image-session`
-// 标定页图片缓存（双图对齐用，sessionStorage，与旧 CALIB_KEY 同口径，刷新内保持）
-export const CALIB_IMAGES_KEY = `${STORAGE_PREFIX}calib-images`
-export const CALIB_POINTS_KEY = `${STORAGE_PREFIX}calib-points`
+// 标定页会话（sessionStorage v2：切页/刷新不丢，「重置本页」按钮清除；只存过程数据，选组另存 CALIB_SELECTION_KEY）
+export const CALIB_SESSION_KEY = `${STORAGE_PREFIX}calib-session`
+// 选择态（sessionStorage，与过程数据分离）：刷新/切页恢复选中，「重置本页」不清，关 tab 自清。
+// 识别页 { imageId }；标定页 { pairId }（顶部图片管理区的「当前选中组」）
+export const REC_SELECTION_KEY = `${STORAGE_PREFIX}rec-selection`
+export const CALIB_SELECTION_KEY = `${STORAGE_PREFIX}calib-selection`
+// 图片库（IndexedDB 长期存储：meta 与 blob 分键，避免增删图全量重写所有 Blob 的写放大）
+export const IMAGES_META_KEY = `${STORAGE_PREFIX}images-meta`
+export const IMAGES_BLOB_PREFIX = `${STORAGE_PREFIX}blob:`
+// 旧版单键整数组结构（记录内含 blob）：首次进库一次性拆分迁移后删除
+export const IMAGES_LEGACY_KEY = `${STORAGE_PREFIX}images`
 // 历史条数上限（LRU：超出淘汰最旧）
 export const HISTORY_MAX = 20
 // 存入前压缩：最长边像素 + JPEG 质量
@@ -39,4 +47,18 @@ export const DOCS_ZIP_MAX_BYTES = 50 * 1024 * 1024
 export const DOCS_BUILTIN = [
   { file: '操作流程与建议.md', title: '操作流程与建议' },
   { file: '重构项目需求说明.md', title: '重构需求说明' },
+]
+
+// 内置示例素材（public/samples/）命名约定：组号开头；同组标定对用 -a/-b 后缀，零散图无后缀。
+// group/slot 仅供展示徽章与标定页快捷赋值；kind 未设——零散图识别/标定皆可用作体验。
+// scale：标定对自带的默认鼓轮刻度 (mm)，赋槽时自动填充，仅占位——页面实测时可手改，改后值随会话持久化。
+export const SAMPLES_BUILTIN = [
+  { file: '1-a.jpg', title: '标定对 1 · A', group: '1', slot: 'a', scale: 12.345 },
+  { file: '1-b.jpg', title: '标定对 1 · B', group: '1', slot: 'b', scale: 13.456 },
+  { file: '2.jpg', title: '示例 2' },
+  { file: '3.jpg', title: '示例 3' },
+  { file: '4.jpg', title: '示例 4' },
+  { file: '5.jpg', title: '示例 5' },
+  { file: '6.webp', title: '示例 6' },
+  { file: '7.jpg', title: '示例 7' },
 ]

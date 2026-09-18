@@ -1,6 +1,7 @@
 <script setup>
 /* global cv */
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { watchDebounced } from '@vueuse/core'
 import { useRouter } from 'vue-router'
 import {
   NCard,
@@ -16,6 +17,8 @@ import {
   NCollapse,
   NCollapseItem,
   NInput,
+  NPopconfirm,
+  NDropdown,
   useMessage,
 } from 'naive-ui'
 import {
@@ -25,7 +28,6 @@ import {
   mergeAndNumberRings,
 } from '@/utils/imageProcessor'
 import { drawOverlay } from '@/utils/canvasDrawer'
-import { initDragDrop } from '@/utils/interactionHandler'
 import {
   calculateDiameterData,
   calculateRadiusData,
@@ -33,25 +35,39 @@ import {
   generateCalculationResults,
   calculateRadiusUncertainty,
 } from '@/utils/dataCalculator'
-import { useMeasureStore } from '@/composables/useMeasureStore'
-import { useHistoryStore } from '@/composables/useHistoryStore'
+import { storeToRefs } from 'pinia'
+import { useMeasureStore } from '@/stores/measure'
+import { useHistoryStore } from '@/stores/history'
+import { useImageLibrary } from '@/stores/imageLibrary'
 import ResultTables from '@/components/ResultTables.vue'
 import RingCanvasViewer from '@/components/RingCanvasViewer.vue'
+import ImageTray from '@/components/ImageTray.vue'
 
-// §8 识别页：上传 → 自动圆心 → 人工核对 → 识别暗环 → 环编辑/补环 → 表1表2/不确定度
+// §8 识别页：图片库选图 → 自动圆心 → 人工核对 → 识别暗环 → 环编辑/补环 → 表1表2/不确定度
 const message = useMessage()
 const router = useRouter()
-const { pixelScale, pixelScaleNumber, setSession, saveImageSession, loadImageSession, calibImages } =
-  useMeasureStore()
+const measureStore = useMeasureStore()
+const { pixelScale, calibImages, recSelection } = storeToRefs(measureStore)
+const {
+  pixelScaleNumber,
+  setSession,
+  saveImageSession,
+  loadImageSession,
+  clearImageSession,
+  clearRecSelection,
+} = measureStore
+const imageLibrary = useImageLibrary()
+const { images: libraryImages } = storeToRefs(imageLibrary)
+const { loadLibrary, findImage, ensureObjectURL, addFiles } = imageLibrary
 const { add: addHistory } = useHistoryStore()
 
 // ===== 基础状态 =====
 const isProcessing = ref(false)
 const logs = ref([])
 const logContainerRef = ref(null)
-const fileInputRef = ref(null)
 const algoImageRef = ref(null) // 隐藏 img，供算法写调试帧 & 提取 processedDataUrl
 
+const currentImageId = ref('') // 图片库记录 id：会话持久化的锚点（src 为 objectURL 不落盘）
 const fileName = ref('')
 const imgWidth = ref(0)
 const imgHeight = ref(0)
@@ -207,15 +223,8 @@ function showStatus(msg, type = 'info') {
   })
 }
 
-// ===== 上传 / 加载 =====
-function readFileAsDataURL(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-}
+// ===== 从图片库载入工作图 =====
+// 工作图 src 用 objectURL（不落盘）；会话只存 imageId，恢复时回库取 Blob。
 function dataURLToImage(dataURL) {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -225,26 +234,68 @@ function dataURLToImage(dataURL) {
   })
 }
 
-async function loadFiles(files) {
-  const file = Array.isArray(files) ? files[0] : files
-  if (!file || !file.type?.startsWith('image/')) {
-    message.error('请选择图片文件')
-    return
-  }
-  const dataUrl = await readFileAsDataURL(file)
-  const img = await dataURLToImage(dataUrl)
-  fileName.value = file.name
-  imgState.src = dataUrl
+async function loadLibraryImage(id, { autoProcess = true } = {}) {
+  const rec = findImage(id)
+  if (!rec) return false
+  const img = await dataURLToImage(await ensureObjectURL(id))
+  currentImageId.value = id
+  recSelection.value = { imageId: id } // 选择态独立键：刷新/切页恢复选中，「重置本页」不清
+  fileName.value = rec.title || rec.name
+  imgState.src = img.src
   imgWidth.value = img.naturalWidth
   imgHeight.value = img.naturalHeight
-  showStatus(`📷 已载入图像：${file.name} (${img.naturalWidth}×${img.naturalHeight})`, 'success')
-  await processImage()
+  showStatus(`📷 已载入图像：${fileName.value} (${imgWidth.value}×${imgHeight.value})`, 'success')
+  if (autoProcess) await processImage()
+  return true
 }
 
-function onFilePick(e) {
-  const files = Array.from(e.target.files || [])
-  if (files.length) loadFiles(files)
-  e.target.value = ''
+// 清过程状态（圆心/环/阶段/预处理参数）；不动选择态与工作图身份
+function clearProcessState() {
+  ringList.value = []
+  centerPhase.value = 'idle'
+  detectedCenter.value = null
+  centerProcessedDataUrl.value = null
+  detectedOuterRadius.value = 0
+  imgState.rings = null
+  imgState.center = null
+  resetFilterParams()
+  resultGrayscale.value = false
+  closeZoom()
+}
+
+function onTrayPick(id) {
+  if (!id || id === currentImageId.value) return
+  if (isProcessing.value) {
+    showStatus('⏳ 正在处理中，请稍候…', 'info')
+    return
+  }
+  // 换选 = 新测量对象：旧图的过程数据作废
+  clearImageSession()
+  clearProcessState()
+  loadLibraryImage(id)
+}
+
+// 上传入口（PC/移动统一）：按钮弹 dropdown 二选一——本地文件 / 示例图库（经图片条 expose 的选择器）
+const fileInputRef = ref(null)
+const trayRef = ref(null)
+const uploadMenuOptions = [
+  { label: '本地文件…', key: 'file' },
+  { label: '从示例图库选择…', key: 'sample' },
+]
+function onUploadMenu(key) {
+  if (key === 'file') fileInputRef.value?.click()
+  else trayRef.value?.openPicker()
+}
+async function onFilePick(e) {
+  const f = e.target.files?.[0]
+  e.target.value = '' // 允许重复选同一张图
+  if (!f || isProcessing.value) return
+  const [added] = await addFiles([f])
+  if (added) {
+    clearImageSession()
+    clearProcessState()
+    loadLibraryImage(added.id)
+  }
 }
 
 // ===== 从「像素标定」导入图A/B =====
@@ -261,6 +312,11 @@ async function loadCalibImage(slot) {
     showStatus('⏳ 正在处理中，请稍候…', 'info')
     return
   }
+  // 导入图非图库记录：清库锚定选择态与会话，避免过程数据错锚到旧图
+  currentImageId.value = ''
+  clearRecSelection()
+  clearImageSession()
+  clearProcessState()
   const loaded = await dataURLToImage(img.src)
   fileName.value = img.name || `图${slot}`
   imgState.src = img.src
@@ -462,11 +518,20 @@ function onCenterKeydown(e) {
   let dx = 0
   let dy = 0
   switch (e.key) {
-    case 'ArrowUp': dy = -step; break
-    case 'ArrowDown': dy = step; break
-    case 'ArrowLeft': dx = -step; break
-    case 'ArrowRight': dx = step; break
-    default: return
+    case 'ArrowUp':
+      dy = -step
+      break
+    case 'ArrowDown':
+      dy = step
+      break
+    case 'ArrowLeft':
+      dx = -step
+      break
+    case 'ArrowRight':
+      dx = step
+      break
+    default:
+      return
   }
   e.preventDefault()
   detectedCenter.value = {
@@ -475,11 +540,12 @@ function onCenterKeydown(e) {
   }
 }
 
-// ===== sessionStorage 持久化 =====
+// ===== sessionStorage 持久化（v2：src 不落盘，以 imageId 锚定图片库）=====
 function persistToSession() {
-  if (!imgState.src) return
+  if (!currentImageId.value) return
   saveImageSession({
-    src: imgState.src,
+    version: 2,
+    imageId: currentImageId.value,
     fileName: fileName.value,
     width: imgWidth.value,
     height: imgHeight.value,
@@ -492,26 +558,52 @@ function persistToSession() {
   })
 }
 
-function restoreFromSession() {
+// 恢复链：锚点解析回退链 recSelection.imageId → saved.imageId（同 id 空间：库记录 id）→ 无锚点；
+// 回退理由：recSelection 为四轮新增键，升级前产生的会话只有 imageSession 带锚点，
+// 不回退会把完好的过程会话误清并报误导性警告。二者分离后「重置本页」只清过程会话，选图刷新不丢
+async function restoreFromSession() {
+  await loadLibrary()
   const saved = loadImageSession()
-  if (!saved?.src) return
-  imgState.src = saved.src
-  fileName.value = saved.fileName || ''
-  imgWidth.value = saved.width || 0
-  imgHeight.value = saved.height || 0
-  detectedCenter.value = saved.center || null
-  detectedOuterRadius.value = saved.outerRadius || 0
-  resultGrayscale.value = saved.grayscale || false
-  if (saved.filterParams) Object.assign(filterParams, saved.filterParams)
-  if (saved.rings && saved.rings.length) {
-    ringList.value = saved.rings.map((r) => ({ ...r, enabled: r.enabled !== false }))
-    imgState.rings = saved.rings
-    imgState.center = saved.center
+  const recId = recSelection.value?.imageId || ''
+  let selId = ''
+  if (recId && findImage(recId)) selId = recId
+  else if (saved && saved.version === 2 && saved.imageId && findImage(saved.imageId))
+    selId = saved.imageId
+  if (selId) {
+    const ok = await loadLibraryImage(selId, { autoProcess: false }) // 顺手补写 recSelection
+    if (!ok) return
+    if (saved && saved.version === 2 && saved.imageId === selId) {
+      detectedCenter.value = saved.center || null
+      detectedOuterRadius.value = saved.outerRadius || 0
+      resultGrayscale.value = saved.grayscale || false
+      if (saved.filterParams) Object.assign(filterParams, saved.filterParams)
+      if (saved.rings && saved.rings.length) {
+        ringList.value = saved.rings.map((r) => ({ ...r, enabled: r.enabled !== false }))
+        imgState.rings = saved.rings
+        imgState.center = saved.center
+      }
+      centerPhase.value = saved.phase || 'idle'
+      // processedDataUrl 无法持久化（太大），恢复后若需补环则用原图 fallback
+      centerProcessedDataUrl.value = null
+      showStatus('📂 已从会话恢复上次识别状态', 'success')
+    } else if (saved) {
+      // 过程会话与锚点不匹配（旧版结构/换选残留）→ 丢弃
+      clearImageSession()
+    }
+    return
   }
-  centerPhase.value = saved.phase || 'idle'
-  // processedDataUrl 无法持久化（太大），恢复后若需补环则用原图 fallback
-  centerProcessedDataUrl.value = null
-  showStatus('📂 已从会话恢复上次识别状态', 'success')
+  if (recId) clearRecSelection()
+  if (saved) {
+    clearImageSession()
+    showStatus('⚠️ 会话中的原图已从图库删除，会话已清除', 'info')
+  }
+}
+
+// 「重置本页」：只清过程数据（圆心/环/阶段/参数），保留选图与工作图；图片库不动
+function resetPage() {
+  clearImageSession()
+  clearProcessState()
+  showStatus('🧹 已重置本页过程数据（选图保留）', 'info')
 }
 
 // ===== 合成标注图（存历史 / 会话）=====
@@ -576,19 +668,38 @@ function goExport() {
 }
 
 // ===== 生命周期 =====
-onMounted(() => {
-  restoreFromSession()
+onMounted(async () => {
+  await restoreFromSession()
   document.addEventListener('keydown', onCenterKeydown)
-  initDragDrop(loadFiles, () => true)
 })
 onUnmounted(() => {
   document.removeEventListener('keydown', onCenterKeydown)
 })
 
-// 圆心变更时自动持久化
-watch(detectedCenter, () => {
-  if (centerPhase.value === 'awaiting-center') persistToSession()
+// 图库中当前工作图被删（单删/清空）→ 选择态/会话/工作区一并重置，避免 objectURL 失效后白屏
+watch(libraryImages, () => {
+  if (currentImageId.value && !findImage(currentImageId.value)) {
+    clearRecSelection()
+    clearImageSession()
+    clearProcessState()
+    currentImageId.value = ''
+    imgState.src = ''
+    fileName.value = ''
+    imgWidth.value = 0
+    imgHeight.value = 0
+    showStatus('⚠️ 当前工作图已从图库删除，工作区已重置', 'info')
+  }
 })
+
+// 过程数据全量覆盖：会话字段变更防抖写 sessionStorage（圆心微调/环编辑/预处理参数/阶段切换都不丢）；
+// 此前仅部分路径手动调 persist，手调圆心后刷新会回退
+watchDebounced(
+  [detectedCenter, ringList, filterParams, resultGrayscale, centerPhase, detectedOuterRadius],
+  () => {
+    if (currentImageId.value) persistToSession()
+  },
+  { deep: true, debounce: 300 },
+)
 </script>
 
 <template>
@@ -605,7 +716,10 @@ watch(detectedCenter, () => {
     <!-- 隐藏 img 供算法调试帧写入 -->
     <img ref="algoImageRef" class="hidden" alt="" />
 
-    <!-- 上传 / 状态 -->
+    <!-- 顶部图片库（拖入入库 / 示例选择器宿主 / 选图载入） -->
+    <ImageTray ref="trayRef" :model-value="currentImageId" @update:model-value="onTrayPick" />
+
+    <!-- 工作图状态 / 上传入口 / 会话重置 -->
     <n-card :bordered="false" class="bg-card">
       <n-space align="center" wrap :size="12">
         <input
@@ -615,16 +729,24 @@ watch(detectedCenter, () => {
           class="hidden"
           @change="onFilePick"
         />
+        <n-dropdown :options="uploadMenuOptions" @select="onUploadMenu">
+          <n-button type="primary" :disabled="isProcessing">
+            <template #icon><i class="i-carbon:image" /></template>
+            上传图片
+          </n-button>
+        </n-dropdown>
         <n-button :disabled="!calibAReady" @click="loadCalibImage('A')">导入图A</n-button>
         <n-button :disabled="!calibBReady" @click="loadCalibImage('B')">导入图B</n-button>
-        <n-button type="primary" @click="fileInputRef?.click()">
-          <template #icon><i class="i-carbon:upload" /></template>
-          上传牛顿环图像
-        </n-button>
         <n-tag v-if="fileName" :bordered="false" round>
           {{ fileName }} · {{ imgWidth }}×{{ imgHeight }}
         </n-tag>
-        <span class="text-xs opacity-50">支持拖拽图片到页面任意处</span>
+        <n-popconfirm @positive-click="resetPage">
+          <template #trigger>
+            <n-button type="warning" secondary :disabled="!currentImageId"> 重置本页 </n-button>
+          </template>
+          清除本页识别过程数据（圆心/环/预处理参数；选图与图库保留），确认？
+        </n-popconfirm>
+        <span class="text-xs opacity-50">图片在上方图片库管理，拖入即长期保存</span>
       </n-space>
     </n-card>
 
@@ -652,7 +774,7 @@ watch(detectedCenter, () => {
     <!-- 识别视图 (RingCanvasViewer) -->
     <n-card :bordered="false" class="bg-card" title="识别视图">
       <template #header-extra>
-        <n-button size="small" :disabled="!zoomCanUse" @click="openZoom">
+        <n-button :disabled="!zoomCanUse" @click="openZoom">
           <template #icon><i class="i-carbon:maximize" /></template>
           全屏放大
         </n-button>
@@ -683,16 +805,11 @@ watch(detectedCenter, () => {
         </n-alert>
         <n-space align="center" wrap :size="12">
           <span class="text-sm">圆心 X</span>
-          <n-input-number v-model:value="detectedCenter.x" size="small" :step="1" class="!w-28" />
+          <n-input-number v-model:value="detectedCenter.x" :step="1" class="!w-28" />
           <span class="text-sm">圆心 Y</span>
-          <n-input-number v-model:value="detectedCenter.y" size="small" :step="1" class="!w-28" />
-          <n-button size="small" @click="redetectCenter">重新检测</n-button>
-          <n-button
-            size="small"
-            type="primary"
-            :loading="isProcessing"
-            @click="confirmCenterAndDetectRings"
-          >
+          <n-input-number v-model:value="detectedCenter.y" :step="1" class="!w-28" />
+          <n-button @click="redetectCenter">重新检测</n-button>
+          <n-button type="primary" :loading="isProcessing" @click="confirmCenterAndDetectRings">
             确认圆心并识别暗环
           </n-button>
         </n-space>
@@ -746,7 +863,6 @@ watch(detectedCenter, () => {
               <td class="border border-gray-400/30 px-3 py-1.5 text-center">
                 <n-input-number
                   v-model:value="ring.number"
-                  size="tiny"
                   :step="1"
                   class="!w-20"
                   @update:value="onRingNumberChange(ring)"
@@ -770,9 +886,7 @@ watch(detectedCenter, () => {
           </tbody>
         </table>
       </div>
-      <div v-else class="py-8 text-center text-sm opacity-40">
-        请先上传图像并完成环识别
-      </div>
+      <div v-else class="py-8 text-center text-sm opacity-40">请先上传图像并完成环识别</div>
     </n-card>
 
     <!-- 标定值 + 逐差步长 -->
@@ -780,16 +894,17 @@ watch(detectedCenter, () => {
       <n-space align="center" wrap :size="16">
         <n-space align="center" :size="8">
           <span class="text-sm">像素标定值 (mm/像素)</span>
-          <n-input v-model:value="pixelScale" size="small" class="!w-32" placeholder="如 0.0025" />
+          <n-input v-model:value="pixelScale" class="!w-32" placeholder="如 0.0025" />
         </n-space>
         <n-space align="center" :size="8">
           <span class="text-sm">逐差法步长 (m−n)</span>
-          <n-input-number v-model:value="diffStep" size="small" :min="1" :step="1" class="!w-24" />
+          <n-input-number v-model:value="diffStep" :min="1" :step="1" class="!w-24" />
         </n-space>
-        <n-button size="small" @click="router.push('/calibration')">去标定页获取标定值</n-button>
+        <n-button @click="router.push('/calibration')">去标定页获取标定值</n-button>
       </n-space>
       <p class="mt-2 text-xs opacity-50">
-        标定值未设定（空 / ≤0）时，直径 mm 与曲率半径按未设定处理；可手动输入或在标定页「应用到识别」。
+        标定值未设定（空 / ≤0）时，直径 mm
+        与曲率半径按未设定处理；可手动输入或在标定页「应用到识别」。
       </p>
     </n-card>
 
@@ -835,7 +950,7 @@ watch(detectedCenter, () => {
               <n-slider v-model:value="filterParams.claheTile" :min="4" :max="16" :step="1" />
             </div>
           </div>
-          <n-button size="small" class="mt-3" @click="resetFilterParams">重置参数</n-button>
+          <n-button class="mt-3" @click="resetFilterParams">重置参数</n-button>
         </n-collapse-item>
       </n-collapse>
     </n-card>

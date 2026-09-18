@@ -3,11 +3,12 @@ import { computed, ref } from 'vue'
 import { NCard, NButton, NSpace, NAlert, NUpload, useMessage, NTag } from 'naive-ui'
 import ResultTables from '@/components/ResultTables.vue'
 import { parseResultJSON, buildResultPayload } from '@/utils/resultIO'
-import { useMeasureStore } from '@/composables/useMeasureStore'
+import { storeToRefs } from 'pinia'
+import { useMeasureStore } from '@/stores/measure'
 
 // §8 数据页：导入测量结果 JSON 回显（与导出页 JSON 互逆，schema 见 utils/resultIO）
 const message = useMessage()
-const { session } = useMeasureStore()
+const { session } = storeToRefs(useMeasureStore())
 
 const payload = ref(null)
 const errorText = ref('')
@@ -61,7 +62,7 @@ function loadSession() {
           </n-button>
         </n-upload>
         <n-space align="center" :size="8">
-          <n-button v-if="sessionPayload" size="small" @click="loadSession">
+          <n-button v-if="sessionPayload" @click="loadSession">
             <template #icon><i class="i-carbon:recently-viewed" /></template>
             载入当前识别会话
           </n-button>
