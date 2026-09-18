@@ -5,6 +5,15 @@
 
 ## [未发布]
 
+### Added / Changed / Fixed（2026-09-18 RingCanvasViewer 缩放渲染重构 + 全屏放大语义修正）
+
+- **缩放档位量化**：`ZOOM_STEP=1.4` 几何级数 → `ZOOM_SNAP=0.25` 线性档位（0.5/0.75/1/1.25…，每次 ±一档）；非档位值时 `+` 进到最近档、`−` 退到最近档；缩小下限 `scaleMin` 钳到不超过原图 1x（窄图不强制放大），`fitWidth` 对小图退化为原尺寸。
+- **渲染方案钉死原尺寸**（核心，详见 `AGENTS.local.md` 巨坑条目）：canvas backing 钉死为图像原始像素、坐标恒等映射、零 `setTransform`，缩放全交 CSS（canvas 与 img 同一内容层容器、`w-full h-full` 随容器拉伸），线宽/字号用 `unit=1/scale` 补偿恒定屏幕粗细；取舍「位置绝对正确 > 高倍率发糊」。移除 `resetView` / `initialCrop` / `onScroll` 及 `stageRef`（视口测量改 `scrollRef`）。
+- **全屏放大 = 纯视图放大**：交互模式按 `centerPhase` 与内联视图镜像（`interactive`/`center-draggable`/`show-center`），不再硬绑「补环」——核对圆心阶段放大后拖拽即设圆心；弹窗标题 `zoomTitle` 随阶段动态；删除 `zoomCrop`/`computeZoomCrop`/`zoomCanUse`，全屏按钮不再禁用。
+- **圆心确认悬停反馈**：新增 `drawCenterPreview`，核对圆心时鼠标悬停在光标处绘制半透明十字 + 虚线圆（臂长跟随 `crossArm`），按下前可预判落点（参考补环悬停高亮）。
+- **重置本页回核对圆心**：`resetPage` 清过程数据后，工作图仍在时立即重跑 `processImage` 自动检测圆心回到 `awaiting-center`（此前停在 `idle` 且同图重选被短路，用户无从继续）。
+- **工具栏 UI**：按钮图标化 + `NTooltip` 说明（含键盘提示），窄屏横向滑动隐藏滚动条。
+
 ### Added / Changed / Fixed（2026-09-18 图片库与会话持久化重构 → 状态层 Pinia 化，一至六轮合并）
 
 - **图片库 IndexedDB 化**：`stores/imageLibrary` meta/blob 分键（`nr:images-meta` + 每图一键 `nr:blob:<id>`，官方 `useIDBKeyval` + `idb-keyval`，旧单键数据首载自动拆分迁移）；原图不压缩直存、objectURL 统一缓存删除时 revoke；顶部 `ImageTray` 图片条（拖入入库 / 点选 / 清空 / 单图删除，IDB 不可用降级仅内存并提示）；示例素材迁 `public/samples/`、`SAMPLES_BUILTIN` 单一数据源；新增 `SamplePicker` 示例选择器，示例与上传图分离（预览直读 public 路径、选中才幂等入库、可整组赋 A/B 带默认鼓轮刻度）。

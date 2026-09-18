@@ -24,6 +24,14 @@
 - 部署耦合：hash 路由 + 相对 base（相对 base 仅在 hash 路由下安全）；静态资源路径基于 Vite 的 base 拼接。
 - 旧算法迁移 = 抽芯移植：1:1 搬入 `utils/`、剥离 DOM 耦合、公式与阈值不重写。
 
+## 已知巨坑：缩放 × DPR（改 `RingCanvasViewer.vue` 前必读）
+
+- 本项目之初就踩过、当时未入档：CSS 布局尺寸 / img 原始尺寸 / canvas backing（width/height 属性）是三套独立坐标系，叠加 `devicePixelRatio`（手机 2/3，Mac Retina 2）后关系更复杂；dpr=1 的桌面能巧合掩盖错位，换设备/换缩放就爆雷。
+- canvas 是**替换元素**：`absolute + inset-0` 不会拉伸其 CSS 尺寸（`width:auto` 取固有尺寸 = backing px 数），必须显式 `w-full h-full` 才会被容器拉伸。
+- 任何「backing 随 scale×dpr 动态重算」的方案（读 clientWidth 会形成自放大回路；就算从 props×scale×dpr 派生，实测仍漂）均不可靠，已多轮验证失败。
+- **现行口径（勿回退）**：canvas backing 钉死为图像原始像素尺寸，绘制坐标与图像像素恒等映射、零 setTransform；缩放全部交给 CSS（canvas 与 img 同一内容层容器，工具栏只改容器宽高）；线宽/字号用 `unit = 1/scale` 补偿恒定屏幕粗细。取舍：位置绝对正确 > 高倍率下发糊。
+- 模糊问题的后续优化方向是换渲染方案（three.js 已预留，或 Konva 等 2D 库），**不是**回到动态 backing 尺寸；谁再以“更清晰”为由重构 draw() 的尺寸逻辑，先重读本节。
+
 ## 已知取舍
 
 - `RecognitionView.vue` 体量偏大、待拆分：单独排期，不在无关改动里顺手拆。
