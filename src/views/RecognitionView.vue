@@ -699,7 +699,7 @@ watchDebounced(
 </script>
 
 <template>
-  <div class="flex max-w-6xl flex-col gap-4">
+  <div class="flex flex-col gap-4">
     <!-- 内联 SVG 卷积核（锐化 / 边缘增强预览） -->
     <svg width="0" height="0" class="absolute">
       <filter id="sharpenFilter">

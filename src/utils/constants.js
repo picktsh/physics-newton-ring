@@ -1,3 +1,7 @@
+// 站点品牌文案（站名 / 简介）：Header、水印、路由标题、页脚共用单一数据源
+export const SITE_NAME = '牛顿环数字化智能测量系统'
+export const SITE_TAGLINE = '基于OpenCV的透镜曲率半径检测与误差评定工具'
+
 // 物理 / 仪器常量（抽芯自旧 js/constants.js，1:1 保留）
 // 钠光波长 (m)
 export const LAMBDA = 589.3e-9

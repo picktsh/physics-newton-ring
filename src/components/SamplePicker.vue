@@ -72,7 +72,7 @@ async function chooseGroup(card) {
     :show="show"
     preset="card"
     title="示例图库"
-    class="!w-[92vw] max-w-640px"
+    class="!w-[92vw] max-w-5xl"
     @update:show="emit('update:show', $event)"
   >
     <div class="grid grid-cols-2 gap-3 md:grid-cols-4">

@@ -985,7 +985,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex max-w-6xl flex-col gap-4">
+  <div class="flex flex-col gap-4">
     <!-- 顶部图片管理区：组卡布局（A/B 双框+缺图占位）；点卡选组，点占位/已填框换图 -->
     <ImageTray
       ref="trayRef"

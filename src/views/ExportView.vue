@@ -115,7 +115,7 @@ function exportHTML() {
 </script>
 
 <template>
-  <div class="flex max-w-4xl flex-col gap-4">
+  <div class="flex flex-col gap-4">
     <n-card :bordered="false" class="bg-card" title="导出 · 测量结果">
       <n-empty v-if="!payload" description="暂无可导出的测量结果" class="py-6">
         <template #extra>

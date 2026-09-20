@@ -7,7 +7,7 @@ import AppHeader from '@/layouts/AppHeader.vue'
 import AppSider from '@/layouts/AppSider.vue'
 import AppContent from '@/layouts/AppContent.vue'
 import AppNavMenu from '@/layouts/AppNavMenu.vue'
-import { WATERMARK_KEY } from '@/utils/constants'
+import { WATERMARK_KEY, SITE_NAME } from '@/utils/constants'
 
 // §4 布局壳（参考 naive-ui 官网）：页头全宽固定不滚动；
 // 页头下方左右分栏 —— 左侧菜单高度铺满、内部独立滚动，右侧主内容（含 sticky 页脚）内部滚动。
@@ -46,7 +46,7 @@ function toggleMenu() {
     :line-height="100"
     :width="300"
     :z-index="1500"
-    content="牛顿环数字化智能测量系统"
+    :content="SITE_NAME"
     font-color="rgba(128, 128, 128, .08)"
     fullscreen
   />

@@ -13,8 +13,8 @@ function go(path) {
 </script>
 
 <template>
-  <div class="max-w-5xl">
-    <n-grid :x-gap="16" :y-gap="16" cols="1 sm:2" responsive="screen">
+  <div>
+    <n-grid :x-gap="16" :y-gap="16" cols="1 sm:2 xl:3" responsive="screen">
       <n-grid-item v-for="item in entries" :key="item.path">
         <n-card
           :bordered="false"

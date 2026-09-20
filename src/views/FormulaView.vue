@@ -37,7 +37,7 @@ const fFinal = 'R = (\\bar{R} \\pm U)\\ \\text{m},\\qquad U_R = \\dfrac{U}{\\bar
 </script>
 
 <template>
-  <div class="flex max-w-4xl flex-col gap-4">
+  <div class="flex flex-col gap-4">
     <n-alert :bordered="false" type="info" title="本页用途">
       汇总牛顿环实验在本工具中用到的全部公式、推导关系与常量速查，供测量与数据处理时对照查阅。
       实测结果（含具体数值）请前往「识别 / 数据展示」页查看。

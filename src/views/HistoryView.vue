@@ -73,7 +73,7 @@ function clearAll() {
 </script>
 
 <template>
-  <div class="flex max-w-5xl flex-col gap-4">
+  <div class="flex flex-col gap-4">
     <n-card :bordered="false" class="bg-card">
       <div class="flex items-center justify-between">
         <div>
@@ -139,7 +139,7 @@ function clearAll() {
       v-model:show="viewOpen"
       preset="card"
       :title="viewRecord?.title || '历史记录'"
-      class="!w-[92vw] max-w-3xl"
+      class="!w-[92vw] max-w-5xl"
       :bordered="false"
     >
       <div v-if="viewRecord" class="flex flex-col gap-4">

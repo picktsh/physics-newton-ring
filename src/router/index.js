@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { SITE_NAME } from '@/utils/constants'
 
 // 路由表 = 菜单 / 首页入口 / 内容页头部的单一数据源（§4），不重复维护
 // meta.description：一句话功能说明，同时用于首页卡片文案与内容区大标题下的副标题
@@ -96,7 +97,7 @@ const router = createRouter({
 
 // 标题联动（§9）
 router.afterEach((to) => {
-  const base = '牛顿环数字化智能测量系统'
+  const base = SITE_NAME
   document.title = to.meta?.title ? `${to.meta.title} · ${base}` : base
 })
 
