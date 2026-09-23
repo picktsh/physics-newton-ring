@@ -25,19 +25,22 @@ const description = computed(() => route.meta?.description || '')
     content-style="min-height: 100%; display: flex; flex-direction: column"
     class="h-full min-w-0"
   >
+    <!-- padding 在外层全宽容器：窄屏贴边留白不随限宽丢失；超宽屏下正文限宽 1440 居中 -->
     <div class="flex-grow p-4 md:p-6">
-      <!-- 页面标题区（参考 naive-ui 官网内容页头部） -->
-      <div class="mb-6">
-        <div class="text-2xl font-bold md:text-3xl">{{ title }}</div>
-        <p v-if="description" class="mt-2 text-sm opacity-60">{{ description }}</p>
-      </div>
+      <div class="mx-auto w-full max-w-[1440px]">
+        <!-- 页面标题区（参考 naive-ui 官网内容页头部） -->
+        <div class="mb-6">
+          <div class="text-2xl font-bold md:text-3xl">{{ title }}</div>
+          <p v-if="description" class="mt-2 text-sm opacity-60">{{ description }}</p>
+        </div>
 
-      <!-- 路由切换过渡动画 -->
-      <router-view v-slot="{ Component }">
-        <transition name="fade-slide" mode="out-in">
-          <component :is="Component" />
-        </transition>
-      </router-view>
+        <!-- 路由切换过渡动画 -->
+        <router-view v-slot="{ Component }">
+          <transition name="fade-slide" mode="out-in">
+            <component :is="Component" />
+          </transition>
+        </router-view>
+      </div>
     </div>
 
     <app-footer />
